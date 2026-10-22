@@ -1,0 +1,5 @@
+{
+  "name": "workflow",
+  "description": "Set up (/workflow:init) and update (/workflow:sync) the workflow kit in a repository. The kit's files are committed to each repo, so they work in local, cloud and CI sessions alike.",
+  "author": { "name": "Raymond Yang" }
+}

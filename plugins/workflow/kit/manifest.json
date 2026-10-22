@@ -1,0 +1,142 @@
+{
+  "files": [
+    {
+      "target": "CLAUDE.md",
+      "source": "CLAUDE.light.md",
+      "mode": "seeded",
+      "levels": [
+        "light"
+      ]
+    },
+    {
+      "target": "CLAUDE.md",
+      "source": "CLAUDE.full.md",
+      "mode": "seeded",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/workflow.json",
+      "source": ".claude/workflow.json",
+      "mode": "seeded",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": "docs/decisions.md",
+      "source": "docs/decisions.md",
+      "mode": "seeded",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": "docs/decisions/process.md",
+      "source": "docs/decisions/process.md",
+      "mode": "seeded",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": "docs/plans/README.md",
+      "source": "docs/plans/README.md",
+      "mode": "seeded",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/hooks/guard-default-branch.py",
+      "source": ".claude/hooks/guard-default-branch.py",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ],
+      "executable": true
+    },
+    {
+      "target": ".claude/workflow/check.py",
+      "source": ".claude/workflow/check.py",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ],
+      "executable": true
+    },
+    {
+      "target": ".claude/agents/explore.md",
+      "source": ".claude/agents/explore.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/agents/reviewer.md",
+      "source": ".claude/agents/reviewer.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/skills/checkpoint/SKILL.md",
+      "source": ".claude/skills/checkpoint/SKILL.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/agents/planner.md",
+      "source": ".claude/agents/planner.md",
+      "mode": "managed",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/agents/architect.md",
+      "source": ".claude/agents/architect.md",
+      "mode": "managed",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/agents/executor.md",
+      "source": ".claude/agents/executor.md",
+      "mode": "managed",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/skills/parallel-work/SKILL.md",
+      "source": ".claude/skills/parallel-work/SKILL.md",
+      "mode": "managed",
+      "levels": [
+        "full"
+      ]
+    },
+    {
+      "target": "docs/plans/_template.md",
+      "source": "docs/plans/_template.md",
+      "mode": "managed",
+      "levels": [
+        "full"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""Copy the workflow kit into a repository, report on it, and keep it up to date.
+
+    workflow-kit init    --target DIR --level light|full [--force]
+    workflow-kit status  --target DIR
+    workflow-kit sync    --target DIR [--apply] [--level full]
+    workflow-kit resolve --target DIR PATH...
+    workflow-kit exclude --target DIR PATH...
+    workflow-kit check   --target DIR
+
+The kit lives beside this script (../kit). Its manifest lists every file with the levels that
+include it and a mode:
+
+- managed: generic files (agents, skills, the hook, the checker, the plan template). `sync`
+  brings them up to date; a file the repository has edited is never overwritten, only reported.
+- seeded: written once (by `init`, or by `sync` when moving up a level) and owned by the
+  repository from then on (CLAUDE.md, the decisions docs, the config). `sync` never rewrites or
+  restores them.
+
+`.claude/workflow.lock.json` in the repository records the level, the managed files the repository
+has opted out of, and for each managed file the hash of the kit version it last took. That is what
+lets `sync` tell "the kit changed" apart from "this repository changed it". Hashes ignore CRLF vs LF,
+so a Windows checkout does not look edited. Standard library only; Python 3.9+.
+"""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import hashlib
+import json
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
+
+KIT = Path(__file__).resolve().parent.parent / "kit"
+LOCK = ".claude/workflow.lock.json"
+SETTINGS = ".claude/settings.json"
+LEVELS = ("light", "full")
+
+GUARD_HOOK = {
+    "matcher": "Edit|Write|NotebookEdit",
+    "hooks": [
+        {
+            "type": "command",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-default-branch.py"',
+            "timeout": 15,
+            "statusMessage": "Checking branch before edit",
+        }
+    ],
+}
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+
+
+def manifest() -> list[dict]:
+    return json.loads((KIT / "manifest.json").read_text(encoding="utf-8"))["files"]
+
+
+def kit_version() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(KIT), "log", "-1", "--format=%h %cs", "--", "."],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+        return out or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def entries_for(level: str) -> list[dict]:
+    return [e for e in manifest() if level in e["levels"]]
+
+
+def source(entry: dict) -> Path:
+    return KIT / ("seeds" if entry["mode"] == "seeded" else "files") / entry["source"]
+
+
+def seed_bytes(entry: dict) -> bytes:
+    return source(entry).read_bytes().replace(b"{{TODAY}}", date.today().isoformat().encode())
+
+
+def read_lock(target: Path) -> dict:
+    path = target / LOCK
+    if not path.exists():
+        sys.exit(f"{target} has no {LOCK}; run `workflow-kit init` first.")
+    lock = json.loads(path.read_text(encoding="utf-8"))
+    lock.setdefault("excluded", [])
+    return lock
+
+
+def write_lock(target: Path, lock: dict) -> None:
+    lock["excluded"] = sorted(set(lock.get("excluded", [])))
+    (target / LOCK).write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def load_settings(target: Path) -> dict:
+    path = target / SETTINGS
+    if not path.exists():
+        return {}
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"{SETTINGS} is not valid JSON ({e}); fix it first. Nothing was written.")
+    if not isinstance(settings, dict):
+        sys.exit(f"{SETTINGS} must hold a JSON object; fix it first. Nothing was written.")
+    return settings
+
+
+def merge_settings(target: Path, settings: dict) -> str:
+    """Add the branch-guard hook to .claude/settings.json, keeping everything already there."""
+    pre = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
+    if any("guard-default-branch.py" in h.get("command", "")
+           for group in pre for h in group.get("hooks", [])):
+        return "kept     .claude/settings.json (branch guard already wired)"
+    pre.append(GUARD_HOOK)
+    path = target / SETTINGS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return "merged   .claude/settings.json (branch guard hook added)"
+
+
+def write_managed(dest: Path, entry: dict, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    if entry.get("executable"):
+        dest.chmod(0o755)
+
+
+def cmd_init(target: Path, level: str, force: bool) -> int:
+    if (target / LOCK).exists() and not force:
+        print(f"{target} already has {LOCK}; use `sync` to update, or --force to re-run init.")
+        return 1
+    settings = load_settings(target)  # validate before writing anything
+    lock = {"kit": kit_version(), "level": level, "files": {}, "excluded": []}
+    conflicts = 0
+    for entry in entries_for(level):
+        dest = target / entry["target"]
+        if entry["mode"] == "seeded":
+            if dest.exists():
+                print(f"kept     {entry['target']} (exists; seeded files are the repo's own)")
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(seed_bytes(entry))
+            print(f"seeded   {entry['target']}")
+            continue
+        data = source(entry).read_bytes()
+        if dest.exists() and sha(dest.read_bytes()) != sha(data) and not force:
+            print(f"CONFLICT {entry['target']} exists with other content; left as is. Merge the "
+                  "kit's version in by hand (or keep yours), then run "
+                  f"`workflow-kit resolve {entry['target']}`")
+            conflicts += 1
+            continue
+        write_managed(dest, entry, data)
+        lock["files"][entry["target"]] = sha(data)
+        print(f"wrote    {entry['target']}")
+    print(merge_settings(target, settings))
+    write_lock(target, lock)
+    print(f"wrote    {LOCK} (kit {lock['kit']}, level {level})")
+    return 1 if conflicts else 0
+
+
+def classify(target: Path, lock: dict) -> list[tuple[str, str, dict | None]]:
+    """(state, path, entry) for every managed file at the repo's level, plus orphans."""
+    rows: list[tuple[str, str, dict | None]] = []
+    wanted = set()
+    for entry in entries_for(lock["level"]):
+        if entry["mode"] != "managed":
+            continue
+        path = entry["target"]
+        wanted.add(path)
+        if path in lock["excluded"]:
+            rows.append(("excluded", path, entry))
+            continue
+        kit_hash = sha(source(entry).read_bytes())
+        dest = target / path
+        copied = lock["files"].get(path)
+        if not dest.exists():
+            state = "missing" if copied else "new in kit"
+        else:
+            local_hash = sha(dest.read_bytes())
+            if local_hash == kit_hash:
+                state = "current"
+            elif copied is None:
+                state = "untracked"
+            elif local_hash != copied and copied != kit_hash:
+                state = "both changed"
+            elif local_hash != copied:
+                state = "edited here"
+            else:
+                state = "kit updated"
+        rows.append((state, path, entry))
+    for path in sorted(set(lock["files"]) - wanted):
+        rows.append(("left the kit", path, None))
+    return rows
+
+
+def cmd_status(target: Path) -> int:
+    lock = read_lock(target)
+    print(f"level {lock['level']}; last copied from kit {lock['kit']}; kit now {kit_version()}")
+    for state, path, _ in classify(target, lock):
+        print(f"{state:13} {path}")
+    return 0
+
+
+def cmd_sync(target: Path, apply: bool, level: str | None) -> int:
+    lock = read_lock(target)
+    if level and LEVELS.index(level) < LEVELS.index(lock["level"]):
+        sys.exit("sync never removes files: to go down a level, delete them and edit the lock by hand.")
+    upgraded = bool(level) and level != lock["level"]
+    if upgraded:
+        settings = load_settings(target)
+        lock["level"] = level
+    pending = reviews = 0
+    if upgraded:  # seeded files arrive once, with the level that adds them
+        for entry in entries_for(lock["level"]):
+            dest = target / entry["target"]
+            if entry["mode"] != "seeded" or dest.exists():
+                continue
+            if apply:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(seed_bytes(entry))
+                print(f"seeded    {entry['target']}")
+            else:
+                print(f"would seed {entry['target']}")
+                pending += 1
+    for state, path, entry in classify(target, lock):
+        dest = target / path
+        if state in ("kit updated", "new in kit", "missing"):
+            data = source(entry).read_bytes()
+            if apply:
+                write_managed(dest, entry, data)
+                lock["files"][path] = sha(data)
+                print(f"updated   {path} ({state})")
+            else:
+                print(f"would update {path} ({state})")
+                pending += 1
+        elif state in ("both changed", "untracked"):
+            data = source(entry).read_bytes()
+            print(f"REVIEW    {path} ({state}): the repo's copy differs from the kit's. Merge the "
+                  f"kit's changes in by hand (or keep yours), then `workflow-kit resolve {path}`")
+            local = dest.read_text(encoding="utf-8").splitlines(keepends=True)
+            kit = data.decode("utf-8").splitlines(keepends=True)
+            sys.stdout.writelines(difflib.unified_diff(local, kit, f"repo/{path}", f"kit/{path}"))
+            reviews += 1
+        elif state == "edited here":
+            print(f"kept      {path} (edited in this repo; the kit has not changed it since)")
+        elif state == "current" and lock["files"].get(path) != sha(dest.read_bytes()):
+            lock["files"][path] = sha(dest.read_bytes())
+        elif state == "left the kit":
+            print(f"orphan    {path}: no longer in the kit; delete it if unused, then "
+                  f"`workflow-kit exclude {path}` to stop tracking it")
+    if apply:
+        if not reviews:
+            lock["kit"] = kit_version()
+        write_lock(target, lock)
+        if upgraded:
+            print(merge_settings(target, settings))
+            print(f"NOTE      CLAUDE.md is the repo's own, so it was not replaced: bring in what the "
+                  f"{lock['level']} level adds (see the init skill's \"Moving up to full\").")
+    elif pending:
+        print("dry run: nothing written; re-run with --apply")
+    if reviews:
+        print(f"{reviews} file(s) need review before the repo is current with the kit.")
+    return 1 if reviews else 0
+
+
+def cmd_resolve(target: Path, paths: list[str]) -> int:
+    """Record that the repo has taken the kit's current version into its copy (or chosen not to)."""
+    lock = read_lock(target)
+    managed = {e["target"]: e for e in entries_for(lock["level"]) if e["mode"] == "managed"}
+    for path in paths:
+        if path not in managed:
+            sys.exit(f"{path} is not a managed file at level {lock['level']}.")
+        if not (target / path).exists():
+            sys.exit(f"{path} does not exist; run `sync --apply` to restore it, or `exclude` it.")
+        lock["files"][path] = sha(source(managed[path]).read_bytes())
+        print(f"resolved  {path}: future syncs report it as edited here until the kit changes it")
+    write_lock(target, lock)
+    return 0
+
+
+def cmd_exclude(target: Path, paths: list[str]) -> int:
+    """Opt the repo out of managed files: sync stops restoring or updating them."""
+    lock = read_lock(target)
+    for path in paths:
+        lock["excluded"].append(path)
+        lock["files"].pop(path, None)
+        print(f"excluded  {path}: sync will leave it alone (delete it yourself if unwanted)")
+    write_lock(target, lock)
+    return 0
+
+
+def cmd_check(target: Path) -> int:
+    checker = target / ".claude/workflow/check.py"
+    if not checker.exists():
+        sys.exit(f"{checker} not found; run `workflow-kit init` first.")
+    return subprocess.run([sys.executable, str(checker), "--root", str(target)]).returncode
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("init", "status", "sync", "resolve", "exclude", "check"):
+        p = sub.add_parser(name)
+        p.add_argument("--target", default=".", help="repository root (default: .)")
+        if name == "init":
+            p.add_argument("--level", choices=LEVELS, required=True)
+            p.add_argument("--force", action="store_true")
+        if name == "sync":
+            p.add_argument("--apply", action="store_true")
+            p.add_argument("--level", choices=LEVELS, help="move up to this level")
+        if name in ("resolve", "exclude"):
+            p.add_argument("paths", nargs="+", metavar="PATH")
+    args = parser.parse_args()
+    target = Path(args.target).resolve()
+    if args.cmd == "init":
+        return cmd_init(target, args.level, args.force)
+    if args.cmd == "status":
+        return cmd_status(target)
+    if args.cmd == "sync":
+        return cmd_sync(target, args.apply, args.level)
+    if args.cmd == "resolve":
+        return cmd_resolve(target, args.paths)
+    if args.cmd == "exclude":
+        return cmd_exclude(target, args.paths)
+    return cmd_check(target)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

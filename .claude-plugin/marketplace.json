@@ -1,0 +1,12 @@
+{
+  "name": "claude-workflow",
+  "owner": { "name": "Raymond Yang" },
+  "description": "A repo-committed agentic workflow for Claude Code: roles, review gates, a decisions record and plans, kept honest by checks.",
+  "plugins": [
+    {
+      "name": "workflow",
+      "source": "./plugins/workflow",
+      "description": "Set up (/workflow:init) and update (/workflow:sync) the workflow kit in a repository."
+    }
+  ]
+}
