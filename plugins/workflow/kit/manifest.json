@@ -99,6 +99,15 @@
       ]
     },
     {
+      "target": ".claude/skills/handoff/SKILL.md",
+      "source": ".claude/skills/handoff/SKILL.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
       "target": ".claude/agents/planner.md",
       "source": ".claude/agents/planner.md",
       "mode": "managed",

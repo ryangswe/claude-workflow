@@ -63,7 +63,8 @@ class InitTests(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         p = self.repo.path
         for f in ("CLAUDE.md", ".claude/agents/reviewer.md", ".claude/agents/explore.md",
-                  ".claude/skills/checkpoint/SKILL.md", ".claude/workflow/check.py",
+                  ".claude/skills/checkpoint/SKILL.md", ".claude/skills/handoff/SKILL.md",
+                  ".claude/workflow/check.py",
                   ".claude/hooks/guard-default-branch.py", "docs/decisions.md"):
             self.assertTrue((p / f).exists(), f)
         self.assertFalse((p / ".claude/agents/planner.md").exists())
@@ -378,10 +379,19 @@ class KitConsistencyTests(unittest.TestCase):
                          and ("/agents/" in e["target"] or "/skills/" in e["target"])}
             known = {"Explore" if n == "explore" else n for n in installed}
             all_names = {"planner", "architect", "executor", "reviewer", "Explore",
-                         "checkpoint", "parallel-work"}
+                         "checkpoint", "handoff", "parallel-work"}
             for name in all_names:
                 if f"`{name}`" in text:
                     self.assertIn(name, known, f"CLAUDE.{level}.md names `{name}`")
+
+    def test_every_skill_installed_at_a_level_is_named_by_its_skeleton(self) -> None:
+        entries = json.loads((PLUGIN / "kit/manifest.json").read_text())["files"]
+        for level in ("light", "full"):
+            text = (PLUGIN / f"kit/seeds/CLAUDE.{level}.md").read_text()
+            for e in entries:
+                if level in e["levels"] and "/skills/" in e["target"]:
+                    name = Path(e["target"]).parent.name
+                    self.assertIn(f"`{name}`", text, f"CLAUDE.{level}.md must name `{name}`")
 
 
 if __name__ == "__main__":

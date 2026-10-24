@@ -24,8 +24,10 @@ description: Update the workflow kit's managed files (agents, skills, branch gua
    `workflow-kit exclude <path>`, or sync will restore it. An `orphan` is a file the kit dropped:
    delete it if unused, then `exclude` it.
 
-4. Run `python3 .claude/workflow/check.py`, then commit the changed files by explicit path
-   (`chore: sync the workflow kit`). Do not push unless the owner asks.
+4. Run `python3 .claude/workflow/check.py`. A **new skill** from the kit fails it until
+   `CLAUDE.md` names it (an unnamed skill is never opened): add the line the kit's `CLAUDE.md`
+   skeleton for this level uses for it, and show the owner. Then commit the changed files by
+   explicit path (`chore: sync the workflow kit`). Do not push unless the owner asks.
 
 `CLAUDE.md`, the decisions record and `.claude/workflow.json` are the repository's own: sync never
 changes them. If the kit's skeletons gained a rule worth having, propose it to the owner as a

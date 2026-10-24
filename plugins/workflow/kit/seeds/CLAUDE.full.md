@@ -94,6 +94,9 @@ profiles) and what a new worktree lacks, or delete this comment if none. -->
   a third attempt; a worker reports ESCALATE instead.
 - Before declaring non-trivial work done, run `reviewer` with fresh context on the plan and the
   diff. Passing tests are not proof. Fix the material findings, re-run the checks.
+- Ending a session mid-task, switching topic, or past ~300–400k tokens: run `/handoff` (the
+  `handoff` skill). It records state in the repository and prints a short prompt for the next
+  session. Don't let a conversation be the only place work's state lives.
 - **Close out:** the plan's `Status:` line and the active list; the execution log compressed into
   the completion summary with its lesson or `NO_ENTRY`; decision lines that meet the index bar; a
   short summary for the owner.

@@ -40,6 +40,9 @@ section only if there is truly nothing. -->
   patching and ask the `reviewer` agent for a root-cause read before a third attempt.
 - Before declaring non-trivial work done, run the `reviewer` agent with fresh context on the task
   and the diff. Passing tests are not proof. Fix the material findings, re-run the checks.
+- Ending a session mid-task, switching topic, or past ~300–400k tokens: run `/handoff` (the
+  `handoff` skill). It records state in the repository and prints a short prompt for the next
+  session. Don't let a conversation be the only place work's state lives.
 - For lookups, use the `Explore` agent (cheap, read-only) rather than reading large files yourself.
 
 <!-- Workflow kit (light). `workflow-kit sync` updates the managed files under .claude/; this file

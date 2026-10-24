@@ -17,6 +17,7 @@ plugin here is only the convenient way to copy the kit in and keep it updated.
 | Branch guard hook (no edits on `main`/`master`) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
+| `handoff` skill (end a session into the repo, print a starting prompt) | ✓ | ✓ |
 | Decisions record (`docs/decisions.md` + theme files, status lines) | ✓ | ✓ |
 | Workflow check (`.claude/workflow/check.py`) | ✓ | ✓ |
 | `planner`, `architect` (Fable) and `executor` (Sonnet) agents | | ✓ |
@@ -81,6 +82,13 @@ Budgets and the branch guard's exempt folders live in `.claude/workflow.json`.
 
 Everything the kit writes is committed. For a public repository, decide first whether internal
 process notes may be published; `/workflow:init` asks.
+
+## Credits
+
+The `handoff` skill adapts Matt Pocock's `handoff` (github.com/mattpocock/skills, MIT): point at
+existing artifacts instead of copying them, name the skills to load, redact secrets. It differs in
+writing state into the repository instead of a temp file, so it survives cloud sandboxes and
+reaches other machines.
 
 ## Developing the kit
 
