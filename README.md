@@ -9,6 +9,100 @@ The kit's files are **copied into each repository and committed**. That is the p
 sessions, CI and collaborators — whereas a plugin alone does not load in cloud sessions. The
 plugin here is only the convenient way to copy the kit in and keep it updated.
 
+## How it works
+
+### Full: one lead, many bounded workers
+
+The lead is the session you talk to. It owns the goal, the plan, integration and every exchange
+with you. Workers get one bounded task each and answer in a fixed format, so the lead reads a
+short report instead of a whole transcript.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 50, "padding": 14, "wrappingWidth": 260}}}%%
+flowchart TB
+  goal(["You describe the goal"]):::you
+  lead["<b>Lead session</b><br/>Opus · plans, routes, integrates"]:::lead
+  planner["<b>planner</b> · Fable<br/>designs the plan"]:::agent
+  plan["<b>docs/plans/…md</b><br/>tasks · gates · next step"]:::file
+  approve{{"You approve the plan"}}:::you
+  task["<b>Lead hands out a task</b><br/>own worktree when in parallel"]:::lead
+  executor["<b>executor</b> · Sonnet<br/>does one task, reports back"]:::agent
+  explore["<b>Explore</b> · Haiku<br/>quick lookups"]:::agent
+  architect["<b>architect</b> · Fable<br/>judgement call"]:::agent
+  checkpoint["<b>/checkpoint</b><br/>tests · build · workflow check"]:::check
+  rootcause["<b>reviewer</b> · Opus<br/>root-cause read"]:::agent
+  review["<b>reviewer</b> · Opus<br/>fresh eyes on the whole diff"]:::agent
+  closeout["<b>Close out</b><br/>plan status · decisions"]:::file
+  merge{{"You merge"}}:::you
+
+  goal --> lead
+  lead -- "big change" --> planner
+  planner --> plan --> approve --> task
+  lead -- "small change" --> task
+  task --> executor
+  lead -.- explore
+  executor -- "escalates or blocked" --> architect
+  architect -- "re-plan" --> planner
+  executor -- "success" --> checkpoint
+  checkpoint -- "same error twice" --> rootcause
+  rootcause --> task
+  checkpoint -- "passes: commit, next task" --> task
+  checkpoint -- "all tasks done" --> review
+  review --> closeout --> merge
+
+  classDef you fill:#fff4d6,stroke:#b7791f,stroke-width:2px,color:#5c3d00
+  classDef lead fill:#e6ecfb,stroke:#2f5bd3,stroke-width:2px,color:#16244d
+  classDef agent fill:#efe6fb,stroke:#7c4dcc,stroke-width:2px,color:#36195f
+  classDef check fill:#e3f4e8,stroke:#2e8b57,stroke-width:2px,color:#123f25
+  classDef file fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
+  classDef muted fill:#ffffff,stroke:#9ca3af,stroke-width:1px,stroke-dasharray:4 3,color:#4b5563
+```
+
+Model routing comes from each agent file's `model:` line: ROUTINE work goes to Sonnet (Haiku for
+lookups), STRONG to Opus, FRONTIER to Fable.
+
+### Light: one session, guard rails around it
+
+No planner or executors. The session does the work itself and keeps the same checks: the branch
+guard, `/checkpoint`, the two-strikes rule, an independent review and the decisions record.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 50, "padding": 14, "wrappingWidth": 260}}}%%
+flowchart TB
+  goal(["You describe the task"]):::you
+  branch["<b>Session on a branch</b><br/>edits on main are blocked"]:::lead
+  step["<b>Work one step</b>"]:::lead
+  explore["<b>Explore</b> · Haiku<br/>quick lookups"]:::agent
+  checkpoint["<b>/checkpoint</b><br/>tests · build · workflow check"]:::check
+  rootcause["<b>reviewer</b> · Opus<br/>root-cause read"]:::agent
+  more{"More to do?"}:::lead
+  handoff["<b>/handoff</b><br/>saves state in the repo"]:::check
+  review["<b>reviewer</b> · Opus<br/>fresh eyes on the diff"]:::agent
+  decisions["<b>docs/decisions.md</b><br/>record what a later session<br/>could reopen"]:::file
+  merge{{"You merge"}}:::you
+
+  goal --> branch --> step
+  step -.- explore
+  step --> checkpoint
+  checkpoint -- "same error twice" --> rootcause
+  rootcause --> step
+  checkpoint -- "passes: commit" --> more
+  more -- "yes" --> step
+  more -- "stopping for now" --> handoff
+  more -- "done" --> review
+  review --> decisions --> merge
+
+  classDef you fill:#fff4d6,stroke:#b7791f,stroke-width:2px,color:#5c3d00
+  classDef lead fill:#e6ecfb,stroke:#2f5bd3,stroke-width:2px,color:#16244d
+  classDef agent fill:#efe6fb,stroke:#7c4dcc,stroke-width:2px,color:#36195f
+  classDef check fill:#e3f4e8,stroke:#2e8b57,stroke-width:2px,color:#123f25
+  classDef file fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
+  classDef muted fill:#ffffff,stroke:#9ca3af,stroke-width:1px,stroke-dasharray:4 3,color:#4b5563
+```
+
+[docs/workflow.md](docs/workflow.md) covers the rest: where a session's knowledge lives (CLAUDE.md,
+decisions, plans, handoffs), when to hand off, and how an unattended run survives a compaction.
+
 ## Levels
 
 | | light | full |
