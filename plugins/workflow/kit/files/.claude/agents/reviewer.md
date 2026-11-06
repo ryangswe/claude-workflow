@@ -29,10 +29,12 @@ Evaluate:
 - the repository's invariants, and any shared contract (types, wire formats, schemas) whose
   callers on every side must change together
 - correctness, edge cases, failure handling, privacy and security
-- regressions, race conditions, stale state, cleanup
+- regressions, race conditions, stale state, cleanup, unintended coupling
 - unnecessary complexity, speculative abstraction, scope creep
 - whether tests exercise behaviour and failure modes rather than mirror the implementation, and
   whether any test or safeguard was weakened to get a pass
+- whether the verification fits the change: the narrow checks, the integrated checkpoint, and a
+  live or manual check where the change is observable
 - closeout: the plan's `Status:` line, decision records that meet the bar in
   `docs/decisions.md`, release notes when a version moved
 

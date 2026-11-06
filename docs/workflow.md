@@ -81,6 +81,9 @@ committing after every task and keeping the plan current, so a compaction or a r
 resumes from files, not memory. The plan's stop points stand in for you: spending, publishing and
 merging still wait.
 
+This is different from a session left idle while background work finishes into it: that wakes
+the session with a cold cache. The handoff skill's "Before stepping away" covers that case.
+
 ```mermaid
 %%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 50, "padding": 14, "wrappingWidth": 260}}}%%
 flowchart TB
