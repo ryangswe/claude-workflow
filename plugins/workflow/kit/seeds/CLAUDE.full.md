@@ -100,6 +100,9 @@ profiles) and what a new worktree lacks, or delete this comment if none. -->
 - **Close out:** the plan's `Status:` line and the active list; the execution log compressed into
   the completion summary with its lesson or `NO_ENTRY`; decision lines that meet the index bar; a
   short summary for the owner.
+- **Bugs already on the default branch:** the fix's PR description carries one `Missed by:` line
+  per bug, naming the check that should have caught it, and the fix adds that check (review
+  checklist 7).
 
 <!-- Workflow kit (full). `workflow-kit sync` updates the managed files under .claude/; this file
 is the repository's own. -->

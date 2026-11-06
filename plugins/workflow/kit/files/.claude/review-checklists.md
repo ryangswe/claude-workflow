@@ -1,10 +1,10 @@
 # Review checklists
 
-The reviewer (`.claude/agents/reviewer.md`) reads this file on every review. Each checklist
-targets one kind of risk. Most bugs that reviews missed were orderings and lifecycles nobody
-asked about: a late message from a replaced socket, a failed load that left the loop running, a
-publish step that ran without the previous step's verdict. These lists make those questions
-routine.
+The reviewer (`.claude/agents/reviewer.md`) reads this file on every review. Checklists 1 to 6 each
+target one kind of risk, and checklist 7 checks how a bug that was already on the default branch got
+through. Most bugs that reviews missed were orderings and lifecycles nobody asked about: a late
+message from a replaced socket, a failed load that left the loop running, a publish step that ran
+without the previous step's verdict. These lists make those questions routine.
 
 ## How to use them
 
@@ -131,3 +131,33 @@ Use with any of checklists 1 to 5, and for a diff that adds or changes tests.
 3. Does each fake reject or ignore what the real service rejects or ignores (a real service may
    answer "OK" to a request it ignored)? If not, is there at least one check against the real
    service?
+
+## 7. Bugs that reached the default branch
+
+Use when the diff fixes a bug that is already on the default branch, whoever found it: the owner, a
+user, an audit, a later review or a failing run. `git log` or `git blame` on the default branch
+shows whether the faulty code is there. A fix for a bug made earlier on the same unmerged branch
+does not count. Also use it for a PR that lands again a change that was reverted for a bug, when the
+revert left the check to it.
+
+1. Is there a `Missed by:` line for each bug, naming the check that should have caught it and what
+   that check now is? For example,
+   `Missed by: no test sent a late close after a reconnect; added one`. The check can be a test that
+   was missing or too narrow, a lint rule that was off, a review question nobody asked, a review
+   that was skipped, or a live check that wasn't run. `Missed by: none (<reason>)` is a valid answer
+   when no reasonable check would have caught it. Before a PR exists, look for the line in the plan,
+   the brief or the commit message. A missing line is a Minor finding before the PR is opened and a
+   Major one after, because the PR description is where it is collected.
+2. Does the diff add that check, or say where it went? A regression test must fail without the fix,
+   so answer checklist 6, item 1 for it. A lint rule counts. A revert may leave the check to the PR
+   that lands the change again, if the revert's `Missed by:` line says so. A new review question
+   goes in this repository's review additions. If it would help every repository, send it to the
+   workflow kit's maintainer as a request once it has caught something here, written in general
+   terms with no names, paths or details private to this repository.
+3. Does the same bug sit anywhere else, such as a copy of the code or a sibling handler, on the
+   default branch of this repository or of a repository the plan or PR names? List each place, and
+   either fix it here or name where it is tracked.
+
+In a public repository, PR text names no private repository, private tracker or security gap. For a
+security fix, the `Missed by:` line names only the kind of check. Other-repository places and
+private links go in the review report or a private issue.
