@@ -7,6 +7,7 @@ copies and updates them (`plugins/workflow/bin/workflow-kit`), and the plugin sk
 ## Commands
 
 - Tests: `python3 -m unittest discover -s tests`
+- Lint: `uvx ruff@0.17.4 check .` (bug-finding rules only, `ruff.toml`); CI runs both
 - Manifests: `claude plugin validate .` and `claude plugin validate ./plugins/workflow`
 
 ## Rules
