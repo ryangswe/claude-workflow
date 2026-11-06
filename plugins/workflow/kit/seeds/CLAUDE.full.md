@@ -32,8 +32,8 @@ this section. -->
 
 For non-trivial work the lead session is the orchestrator: it owns the goal, the architecture, the
 task graph, integration and every exchange with the owner. Workers are the agents in
-`.claude/agents/` (`planner`, `architect`, `executor`, `reviewer`, `Explore`); their checklists
-and report formats live there.
+`.claude/agents/` (`planner`, `architect`, `executor`, `reviewer`, `Explore`); their report formats
+live there, and the reviewer's checklists in `.claude/review-checklists.md`.
 
 - **Milestone specs: do not edit files until the architecture and the first small change are
   explained and approved.** Inspect read-only first.

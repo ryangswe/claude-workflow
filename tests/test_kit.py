@@ -62,8 +62,8 @@ class InitTests(unittest.TestCase):
         out = self.repo.kit("init", "--level", "light")
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         p = self.repo.path
-        for f in ("CLAUDE.md", ".claude/agents/reviewer.md", ".claude/agents/explore.md",
-                  ".claude/skills/checkpoint/SKILL.md", ".claude/skills/handoff/SKILL.md",
+        for f in ("CLAUDE.md", ".claude/agents/reviewer.md", ".claude/review-checklists.md",
+                  ".claude/agents/explore.md", ".claude/skills/checkpoint/SKILL.md", ".claude/skills/handoff/SKILL.md",
                   ".claude/workflow/check.py",
                   ".claude/hooks/guard-default-branch.py", "docs/decisions.md"):
             self.assertTrue((p / f).exists(), f)
@@ -383,6 +383,17 @@ class KitConsistencyTests(unittest.TestCase):
             for name in all_names:
                 if f"`{name}`" in text:
                     self.assertIn(name, known, f"CLAUDE.{level}.md names `{name}`")
+
+    def test_a_kit_file_named_in_another_is_installed_at_its_levels(self) -> None:
+        import re
+        entries = json.loads((PLUGIN / "kit/manifest.json").read_text())["files"]
+        levels_of = {e["target"]: set(e["levels"]) for e in entries if e["mode"] == "managed"}
+        for e in entries:
+            folder = "seeds" if e["mode"] == "seeded" else "files"
+            text = (PLUGIN / "kit" / folder / e["source"]).read_text()
+            for ref in set(re.findall(r"`(\.claude/[\w./-]+)`", text)) & levels_of.keys():
+                missing = set(e["levels"]) - levels_of[ref]
+                self.assertFalse(missing, f"{e['source']} points to {ref}, which is not installed at {missing}")
 
     def test_every_skill_installed_at_a_level_is_named_by_its_skeleton(self) -> None:
         entries = json.loads((PLUGIN / "kit/manifest.json").read_text())["files"]

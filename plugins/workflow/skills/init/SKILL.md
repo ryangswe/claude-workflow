@@ -15,8 +15,9 @@ parts that need judgement: choosing the level and filling in `CLAUDE.md`.
    below if the owner wants the full level.
 
 2. **Choose the level with the owner.** Recommend one:
-   - **light**: `CLAUDE.md`, the branch guard, the `reviewer` and `Explore` agents, `/checkpoint`,
-     `/handoff`, the decisions record and the workflow check. For small or rarely changed projects.
+   - **light**: `CLAUDE.md`, the branch guard, the `reviewer` and `Explore` agents with the review
+     checklists, `/checkpoint`, `/handoff`, the decisions record and the workflow check. For small
+     or rarely changed projects.
    - **full**: adds the `planner`, `architect` and `executor` agents, the `parallel-work` skill,
      plans with their template, and the orchestration rules. For multi-session programmes.
 
