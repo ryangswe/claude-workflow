@@ -110,6 +110,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 | `CLAUDE.md` skeleton (seeded) | short | adds orchestration, model routing, closeout |
 | Branch guard hook (no edits on `main`/`master`) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
+| Review checklists (`.claude/review-checklists.md`: six risk lists the reviewer picks from) | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
 | `handoff` skill (end a session into the repo, print a starting prompt) | ✓ | ✓ |
 | Decisions record (`docs/decisions.md` + theme files, status lines) | ✓ | ✓ |

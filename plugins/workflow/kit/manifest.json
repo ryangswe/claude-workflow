@@ -90,6 +90,15 @@
       ]
     },
     {
+      "target": ".claude/review-checklists.md",
+      "source": ".claude/review-checklists.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
       "target": ".claude/skills/checkpoint/SKILL.md",
       "source": ".claude/skills/checkpoint/SKILL.md",
       "mode": "managed",
