@@ -50,8 +50,9 @@ size, offer this skill at the next natural break.
 4. **Commit and push.** Stage explicit paths, never `git add .`. Work in progress is fine to
    commit on a feature branch; say so in the subject (`wip: …`). If nothing changed but the state
    is only in your head, an empty commit (`git commit --allow-empty`) holding the step 3 text is
-   better than losing it. Push the branch; for a lead's handoff file, open a small docs PR. If you cannot push, say so plainly: the next session
-   will not see unpushed work, and the prompt must say where it is.
+   better than losing it. Push the branch; for a lead's handoff file, open a small docs PR. If you
+   cannot push, say so plainly: the next session will not see unpushed work, and the prompt must
+   say where it is.
 
 5. **Print the starting prompt** in one code block, at most ten lines, for the owner to paste into
    a new session:
