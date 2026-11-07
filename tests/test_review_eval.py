@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,6 +135,30 @@ class ReviewFileTests(Fixture):
         self.assertEqual((snap / ".review/base/old.py").read_text(), "legacy = 1\n")  # deleted file
         self.assertFalse((snap / ".review/base/util.py").exists())  # new file: no base version
         self.assertNotIn(".review", git(snap, "diff", "--name-only", "HEAD^", "HEAD"))
+
+    def test_the_users_git_config_does_not_shape_the_diff(self) -> None:
+        snap = self.tmp / "snap"
+        ev.build_snapshot(self.repo, self.case, self.config, self.cfgdir, snap)
+        cfg = self.tmp / "user.gitconfig"
+        cfg.write_text("[color]\n\tui = always\n[diff]\n\tnoprefix = true\n")
+        with unittest.mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(cfg)}):
+            ev.write_review_files(snap)
+        diff = (snap / ".review/pr.diff").read_text()
+        self.assertTrue(diff.startswith("diff --git a/"), diff[:40])
+        self.assertNotIn("\x1b[", diff)
+
+    def test_symlinks_that_point_outside_are_replaced_and_inside_ones_kept(self) -> None:
+        snap = self.tmp / "snap"
+        ev.build_snapshot(self.repo, self.case, self.config, self.cfgdir, snap)
+        (self.tmp / "secret.txt").write_text("fix\n")
+        os.symlink(self.tmp / "secret.txt", snap / "out-abs")
+        os.symlink("../secret.txt", snap / "out-rel")
+        os.symlink("app.py", snap / "in")
+        replaced = sorted(ev.neutralise_symlinks(snap))
+        self.assertEqual(replaced, ["out-abs", "out-rel"])
+        self.assertFalse((snap / "out-abs").is_symlink())
+        self.assertNotIn("fix", (snap / "out-rel").read_text().split("->")[0])
+        self.assertTrue((snap / "in").is_symlink())
 
     def test_odd_paths_non_utf8_files_and_type_changes(self) -> None:
         git(self.repo, "checkout", "-q", "-b", "odd", self.merge + "^1")
@@ -394,11 +419,26 @@ class FailureTests(Fixture):
         self.assertFalse(ok)
         self.assertIn("a directory listing", self.said)
 
-    def test_a_read_through_the_planted_symlink_fails_the_probe(self) -> None:
+    def test_a_grep_that_returns_only_file_names_fails_the_probe(self) -> None:
         ok, _ = self.probe_with(
-            "assert os.path.islink('.review/probe-link')\nresults.append(open('.review/probe-link').read())")
+            "results.append('\\n'.join(os.path.join(folder, n) for n in os.listdir(folder) "
+            "if 'PROBE' in open(os.path.join(folder, n)).read()))")
         self.assertFalse(ok)
-        self.assertIn("file contents", self.said)
+        self.assertIn("a directory listing", self.said)
+
+    def test_a_run_whose_tools_returned_nothing_fails_closed(self) -> None:
+        ok, _ = self.probe_with("pass")
+        self.assertFalse(ok)
+        self.assertIn("did not finish, use its tools", self.said)
+
+    def test_the_one_argument_output_format_is_switched_too(self) -> None:
+        fake = self.tmp / "probe_fake.py"
+        fake.write_text(self.FAKE.format(act="results += ['denied'] * 3"))
+        cfg = dict(self.config, output="claude-json",
+                   command=[sys.executable, str(fake), "--output-format=json", "{brief}"])
+        self.assertTrue(ev.probe(self.repo, self.case, cfg, self.cfgdir, self.tmp / "r"))
+        cfg["command"] = [sys.executable, str(fake), "{brief}"]
+        self.assertFalse(ev.probe(self.repo, self.case, cfg, self.cfgdir, self.tmp / "r"))
 
     def test_a_probe_that_never_ran_fails_closed(self) -> None:
         fake = self.tmp / "dead.py"

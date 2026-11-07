@@ -144,8 +144,8 @@ In Claude Code:
 /plugin install workflow@claude-workflow
 ```
 
-The repository is private, so git on that machine must already have access (`gh auth login` and
-`gh auth setup-git`, or an SSH key). Auto-update is off for your own marketplaces by default:
+If the repository is private, git on that machine must already have access (`gh auth login` and
+`gh auth setup-git`, or an SSH key). It is public today: keep anything private out of it. Auto-update is off for your own marketplaces by default:
 turn it on in `/plugin` → Marketplaces, or run `/plugin marketplace update claude-workflow`.
 
 Then, in any repository:

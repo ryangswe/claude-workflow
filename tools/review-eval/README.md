@@ -35,11 +35,15 @@ reviewers' logins (`claude`, and `codex` for config C).
   and Grep only. `--restricted` confines those to the snapshot folder and ignores the settings
   files of the user and of the snapshot, and `--strict-mcp-config` loads no MCP servers. The
   reviewer cannot run tests, install anything or reach the network.
+- **Symlinks cannot lead out.** Before the reviewer starts, every symlink in the working tree that
+  resolves outside the snapshot is replaced by a text file naming its target (recorded in the run
+  as `symlinks_replaced`).
 - **Isolation is checked per config, not assumed.** `probe` asks a real run to reach a secret file
-  outside the snapshot: Read on it, Read through a symlink planted inside the snapshot, Glob over
-  its folder (where a second secret exists only as a file name), Grep in content mode, and a shell.
-  The probe runs with `stream-json` and searches every tool result, not just what the model says.
-  It passes only if the run finished, reported each attempt, and neither secret appears anywhere.
+  outside the snapshot: Read on it, Glob over its folder, and Grep in it, where a second secret
+  exists only as a file name, so a listing or a Grep in any output mode shows it, and a shell. The
+  probe runs with `stream-json` and searches every tool result, not just what the model says. It
+  passes only if the run finished, used its tools, reported its attempts, and neither secret
+  appears anywhere.
   `run` refuses a config until its probe has passed, unless `--skip-probe`. A pass is tied to the
   config, its installed files, this tool's code and the `claude` version, so changing any of them
   needs a new probe. Only claude configs can be probed; Codex's isolation stays unproven.

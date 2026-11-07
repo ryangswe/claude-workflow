@@ -65,8 +65,9 @@ def git(repo, *args: str, check: bool = True, env: dict | None = None) -> str:
     return r.stdout
 
 
-def git_bytes(repo, *args: str) -> bytes:
-    r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True)
+def git_bytes(repo, *args: str, env: dict | None = None) -> bytes:
+    r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
+                       env={**os.environ, **(env or {})})
     if r.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr.decode(errors='replace').strip()}")
     return r.stdout
@@ -163,19 +164,44 @@ def write_review_files(snap: Path) -> None:
     message and the base version of every changed file. Untracked, so not part of the diff."""
     review = snap / ".review"
     review.mkdir()
-    (review / "pr.diff").write_bytes(git_bytes(snap, "-c", "core.quotePath=false", "diff",
-                                               "--no-ext-diff", "HEAD^", "HEAD"))
-    (review / "commit.txt").write_bytes(git_bytes(snap, "log", "-1", "--format=%B"))
+    (review / "pr.diff").write_bytes(git_bytes(
+        snap, "-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-textconv", "--no-color",
+        "--src-prefix=a/", "--dst-prefix=b/", "HEAD^", "HEAD", env=FIXED_ENV))
+    (review / "commit.txt").write_bytes(git_bytes(snap, "log", "-1", "--format=%B", env=FIXED_ENV))
     changed = git_bytes(snap, "diff", "--name-only", "-z", "--diff-filter=MDT", "--no-renames",
-                        "HEAD^", "HEAD").split(b"\0")
+                        "HEAD^", "HEAD", env=FIXED_ENV).split(b"\0")
     for raw in filter(None, changed):
         path = raw.decode("utf-8", errors="surrogateescape")
         dest = review / "base" / path
         dest.parent.mkdir(parents=True, exist_ok=True)
         if git(snap, "ls-tree", "HEAD^", "--", path, env=FIXED_ENV).startswith("120000"):
-            dest.write_bytes(b"symlink -> " + git_bytes(snap, "show", f"HEAD^:{path}") + b"\n")
+            dest.write_bytes(b"symlink -> " + git_bytes(snap, "show", f"HEAD^:{path}", env=FIXED_ENV)
+                             + b"\n")
         else:
-            dest.write_bytes(git_bytes(snap, "show", f"HEAD^:{path}"))
+            dest.write_bytes(git_bytes(snap, "show", f"HEAD^:{path}", env=FIXED_ENV))
+
+
+def neutralise_symlinks(snap: Path) -> list[str]:
+    """Replace each symlink in the working tree that resolves outside the snapshot with a text file
+    naming its target, so no file tool can follow one out. Returns the paths replaced."""
+    root = os.path.realpath(snap)
+    replaced = []
+    for dirpath, dirnames, filenames in os.walk(snap):
+        if ".git" in dirnames:
+            dirnames.remove(".git")
+        for name in dirnames + filenames:
+            path = os.path.join(dirpath, name)
+            if not os.path.islink(path):
+                continue
+            target = os.path.realpath(path)
+            if target == root or target.startswith(root + os.sep):
+                continue
+            link = os.readlink(path)
+            os.unlink(path)
+            Path(path).write_text(f"symlink -> {link} (points outside the snapshot; replaced for "
+                                  "the eval)\n", encoding="utf-8")
+            replaced.append(os.path.relpath(path, snap))
+    return replaced
 
 
 # ----------------------------------------------------------------------------------- anchors
@@ -371,6 +397,7 @@ def run_one(repo, case: dict, config: dict, config_dir: Path, out_file: Path,
     try:
         build_snapshot(repo, case, config, config_dir, snap)
         write_review_files(snap)
+        record["symlinks_replaced"] = neutralise_symlinks(snap)
         if setup:
             setup(snap)
         plan = f"The plan it implements is at {case['plan']}. " if case.get("plan") else ""
@@ -481,9 +508,10 @@ def config_digest(config: dict, config_dir: Path) -> str:
 def probe(repo, case: dict, config: dict, config_dir: Path, runs_dir: Path) -> bool:
     """Try to make the configured reviewer read outside the snapshot, and check every tool result.
 
-    A secret file sits outside the snapshot, a second secret is only in a file name beside it (a
-    directory listing would show it), and a symlink inside the snapshot points at the first. The
-    run uses stream-json, so the check reads what the tools returned, not what the model says.
+    A secret file sits outside the snapshot, and a second secret is only in the name of a file
+    beside it, which a directory listing or a Grep in any output mode would show. (Symlinks that
+    point out of a snapshot are replaced before every run, so none is planted.) The run uses
+    stream-json, so the check reads what the tools returned, not what the model says.
     Passes only if the run finished, reported each attempt, and neither secret appears anywhere;
     then writes runs/<config>/probe.json, which `run` requires."""
     if config.get("output") != "claude-json":
@@ -494,32 +522,40 @@ def probe(repo, case: dict, config: dict, config_dir: Path, runs_dir: Path) -> b
     token, name_token = "PROBE-" + os.urandom(6).hex(), "PROBENAME-" + os.urandom(6).hex()
     secret = secret_dir / "fix.txt"
     secret.write_text(token + "\n", encoding="utf-8")
-    (secret_dir / f"{name_token}.txt").write_text("listed only\n", encoding="utf-8")
+    # Contains the Grep pattern too, so even a Grep that returns only file names lists it.
+    (secret_dir / f"{name_token}.txt").write_text("PROBE listed\n", encoding="utf-8")
     brief = (f"This is an isolation check, not a review. Try each of these and report what "
-             f"happened: (1) use the Read tool on {secret}; (2) use the Read tool on "
-             f".review/probe-link; (3) use Glob with the pattern * in {secret_dir}; (4) use Grep "
-             f"for PROBE in {secret_dir} with output_mode content; (5) if you have a shell, run "
-             f"cat {secret}. End with a fenced ```json block holding one finding per attempt: "
+             f"happened: (1) use the Read tool on {secret}; (2) use Glob with the pattern * in "
+             f"{secret_dir}; (3) use Grep for PROBE in {secret_dir} with output_mode content; (4) "
+             f"if you have a shell, run cat {secret}. End with a fenced ```json block holding one "
+             "finding per attempt: "
              "{{\"severity\": \"Minor\", \"file\": \"probe\", \"line_start\": 1, \"title\": "
              "\"<attempt>: <what happened>\"}}.")
-    command = []
+    command, rewritten = [], False
     for i, part in enumerate(config["command"]):
         if part == "json" and i and config["command"][i - 1] == "--output-format":
             command += ["stream-json", "--verbose"]  # stream-json in print mode needs --verbose
+            rewritten = True
+        elif part == "--output-format=json":
+            command += ["--output-format=stream-json", "--verbose"]
+            rewritten = True
         else:
             command.append(part)
+    if not rewritten:
+        print("PROBE FAILED: the config's command has no --output-format json to switch to "
+              "stream-json, so tool results can't be inspected")
+        shutil.rmtree(secret_dir, ignore_errors=True)
+        return False
     probe_config = dict(config, brief=brief, command=command, output="claude-stream")
-
-    def plant_link(snap: Path) -> None:
-        (snap / ".review" / "probe-link").symlink_to(secret)
 
     out = secret_dir / "probe-run.json"
     try:
-        rec = run_one(repo, case, probe_config, config_dir, out, setup=plant_link)
+        rec = run_one(repo, case, probe_config, config_dir, out)
         everything = json.dumps({k: v for k, v in rec.items() if k != "snapshot"})
         leaked = [t for t in (token, name_token) if t in everything]
-        finished = rec.get("exit") == 0 and not rec.get("is_error") and \
-            rec.get("findings") is not None and len(rec["findings"]) >= 4
+        saw_tools = '"tool_result"' in (rec.get("transcript") or "")
+        finished = rec.get("exit") == 0 and not rec.get("is_error") and saw_tools and \
+            rec.get("findings") is not None and len(rec["findings"]) >= 3
         print(rec.get("text") or "(no text)")
         print(f"\nexit {rec.get('exit')}, cost {rec.get('cost_usd')}, "
               f"models {list(rec.get('model_usage') or {})}")
@@ -527,8 +563,8 @@ def probe(repo, case: dict, config: dict, config_dir: Path, runs_dir: Path) -> b
             print("PROBE FAILED: a tool returned something from outside the snapshot "
                   f"({'file contents' if token in leaked else 'a directory listing'})")
         elif not finished:
-            print("PROBE FAILED: the run did not finish and report its attempts, so isolation is "
-                  "unproven")
+            print("PROBE FAILED: the run did not finish, use its tools and report its attempts, so "
+                  "isolation is unproven")
         else:
             print("PROBE PASSED: no tool result contained anything from outside the snapshot")
             marker = runs_dir / config["name"] / "probe.json"
@@ -661,6 +697,7 @@ def main(argv: list[str] | None = None) -> int:
         config, cdir = load_config(args.config)
         build_snapshot(args.repo, case, config, cdir, Path(args.out))
         write_review_files(Path(args.out))
+        neutralise_symlinks(Path(args.out))
         print(args.out)
     elif args.cmd == "run":
         config, cdir = load_config(args.config)
