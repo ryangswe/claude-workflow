@@ -16,8 +16,8 @@ this section. -->
 ## Working agreements
 
 - **Never change files on the default branch** (`main`/`master`). Branch first
-  (`git checkout -b <slug>`). `.claude/hooks/guard-default-branch.py` blocks Edit/Write there as
-  a backstop, but cannot see shell writes (`sed -i`, `>>`).
+  (`git checkout -b <slug>`). `.claude/hooks/guard-default-branch.py` blocks edits, `git commit`
+  and pushes to it as a backstop, but does not judge other shell writes (`sed -i`, `>>`).
 - Record decisions a later session could plausibly reopen (direction, architecture, contracts,
   security, rejected alternatives): one line in the auto-loaded index @docs/decisions.md and the
   full entry in its `docs/decisions/<theme>.md`. The index header sets the format and budget.

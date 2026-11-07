@@ -108,7 +108,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 | | light | full |
 |---|---|---|
 | `CLAUDE.md` skeleton (seeded) | short | adds orchestration, model routing, closeout |
-| Branch guard hook (no edits on `main`/`master`) | ✓ | ✓ |
+| Branch guard hook (no edits, commits or pushes on `main`/`master`) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
 | Review checklists (`.claude/review-checklists.md`: seven checklists the reviewer picks from) | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
@@ -172,6 +172,10 @@ check, commit). `status`, `sync [--apply] [--level full]`, `resolve` and `exclud
 - The plans' active list agrees with each plan's `Status:` line.
 
 Budgets and the branch guard's exempt folders live in `.claude/workflow.json`.
+
+The branch guard is a backstop for an agent that means to follow `CLAUDE.md`, not a security
+boundary: it parses simple shell commands and fails open. Protect the default branch on the
+remote too (GitHub branch protection or a ruleset: no direct pushes, required checks).
 
 ## Public repositories
 

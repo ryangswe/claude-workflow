@@ -39,14 +39,16 @@ LOCK = ".claude/workflow.lock.json"
 SETTINGS = ".claude/settings.json"
 LEVELS = ("light", "full")
 
+GUARD_MATCHER = "Edit|Write|NotebookEdit|Bash"
+OLD_GUARD_MATCHERS = ("Edit|Write|NotebookEdit", "Edit|Write")  # wired by earlier kit versions
 GUARD_HOOK = {
-    "matcher": "Edit|Write|NotebookEdit",
+    "matcher": GUARD_MATCHER,
     "hooks": [
         {
             "type": "command",
             "command": 'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-default-branch.py"',
             "timeout": 15,
-            "statusMessage": "Checking branch before edit",
+            "statusMessage": "Checking the branch guard",
         }
     ],
 }
@@ -110,17 +112,33 @@ def load_settings(target: Path) -> dict:
     return settings
 
 
-def merge_settings(target: Path, settings: dict) -> str:
-    """Add the branch-guard hook to .claude/settings.json, keeping everything already there."""
+def merge_settings(target: Path, settings: dict, write: bool = True) -> str:
+    """Wire the branch-guard hook in .claude/settings.json, keeping everything already there.
+
+    Adds the hook when it is missing, and widens a matcher an earlier kit wrote (file tools only)
+    to include Bash, so the guard also sees `git commit` and `git push`. A matcher the repository
+    wrote itself is left alone and reported.
+    """
     pre = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    if any("guard-default-branch.py" in h.get("command", "")
-           for group in pre for h in group.get("hooks", [])):
-        return "kept     .claude/settings.json (branch guard already wired)"
-    pre.append(GUARD_HOOK)
+    groups = [g for g in pre
+              if any("guard-default-branch.py" in h.get("command", "") for h in g.get("hooks", []))]
     path = target / SETTINGS
+    if not groups:
+        pre.append(GUARD_HOOK)
+        message = "merged   .claude/settings.json (branch guard hook added)"
+    elif any("Bash" in g.get("matcher", "").split("|") for g in groups):
+        return "kept     .claude/settings.json (branch guard already wired)"
+    elif len(groups) == 1 and groups[0].get("matcher") in OLD_GUARD_MATCHERS:
+        groups[0]["matcher"] = GUARD_MATCHER
+        message = "merged   .claude/settings.json (branch guard now also checks Bash commits and pushes)"
+    else:
+        return ("REVIEW    .claude/settings.json: the branch guard's matcher was changed here; add "
+                "Bash to it by hand so the guard sees `git commit` and `git push`")
+    if not write:
+        return "would " + message.replace("merged   ", "merge ")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-    return "merged   .claude/settings.json (branch guard hook added)"
+    return message
 
 
 def write_managed(dest: Path, entry: dict, data: bytes) -> None:
@@ -211,8 +229,8 @@ def cmd_sync(target: Path, apply: bool, level: str | None) -> int:
     if level and LEVELS.index(level) < LEVELS.index(lock["level"]):
         sys.exit("sync never removes files: to go down a level, delete them and edit the lock by hand.")
     upgraded = bool(level) and level != lock["level"]
+    settings = load_settings(target)  # validate before writing anything
     if upgraded:
-        settings = load_settings(target)
         lock["level"] = level
     pending = reviews = 0
     if upgraded:  # seeded files arrive once, with the level that adds them
@@ -257,12 +275,19 @@ def cmd_sync(target: Path, apply: bool, level: str | None) -> int:
         if not reviews:
             lock["kit"] = kit_version()
         write_lock(target, lock)
+        settings_note = merge_settings(target, settings)
+        if upgraded or not settings_note.startswith("kept"):
+            print(settings_note)
         if upgraded:
-            print(merge_settings(target, settings))
             print(f"NOTE      CLAUDE.md is the repo's own, so it was not replaced: bring in what the "
                   f"{lock['level']} level adds (see the init skill's \"Moving up to full\").")
-    elif pending:
-        print("dry run: nothing written; re-run with --apply")
+    else:
+        settings_note = merge_settings(target, json.loads(json.dumps(settings)), write=False)
+        if not settings_note.startswith("kept"):
+            print(settings_note)
+            pending += settings_note.startswith("would")
+        if pending:
+            print("dry run: nothing written; re-run with --apply")
     if reviews:
         print(f"{reviews} file(s) need review before the repo is current with the kit.")
     return 1 if reviews else 0

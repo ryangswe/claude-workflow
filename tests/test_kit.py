@@ -232,6 +232,27 @@ class SyncTests(unittest.TestCase):
         self.repo.kit("sync", "--apply")
         self.assertTrue(os.access(self.repo.path / f, os.X_OK))
 
+    def test_sync_widens_an_old_guard_matcher_to_bash(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        settings["hooks"]["PreToolUse"][0]["matcher"] = "Edit|Write|NotebookEdit"
+        path.write_text(json.dumps(settings))
+        self.assertIn("would merge", self.repo.kit("sync").stdout)
+        self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"][0]["matcher"],
+                         "Edit|Write|NotebookEdit")  # the dry run wrote nothing
+        self.assertEqual(self.repo.kit("sync", "--apply").returncode, 0)
+        self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"][0]["matcher"],
+                         "Edit|Write|NotebookEdit|Bash")
+
+    def test_a_hand_changed_guard_matcher_is_reported_not_rewritten(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        settings["hooks"]["PreToolUse"][0]["matcher"] = "Edit|MultiEdit"
+        path.write_text(json.dumps(settings))
+        self.assertIn("REVIEW    .claude/settings.json", self.repo.kit("sync", "--apply").stdout)
+        self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"][0]["matcher"],
+                         "Edit|MultiEdit")
+
     def test_a_level_downgrade_is_refused(self) -> None:
         self.repo.kit("sync", "--level", "full", "--apply")
         self.assertNotEqual(self.repo.kit("sync", "--level", "light").returncode, 0)
@@ -358,6 +379,48 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(self.edit("scratch/notes.md"), 0)
         payload = json.dumps({"tool_input": {"file_path": "/tmp/elsewhere.txt"}})
         self.assertEqual(run(sys.executable, str(self.guard), stdin=payload).returncode, 0)
+
+    def bash(self, command: str, cwd: Path | None = None) -> int:
+        payload = json.dumps({"tool_name": "Bash", "cwd": str(cwd or self.p),
+                              "tool_input": {"command": command}})
+        return run(sys.executable, str(self.guard), stdin=payload).returncode
+
+    def test_shell_commits_on_main_are_blocked_and_allowed_on_a_branch(self) -> None:
+        run("git", "commit", "-q", "--allow-empty", "-m", "init", cwd=self.p)
+        for command in ('git commit -m "x"', "git add a.py && git commit -qm x",
+                        "GIT_AUTHOR_NAME=me git commit -m x", f"git -C {self.p} commit -m x",
+                        f"cd {self.p} && git commit -am x"):
+            self.assertEqual(self.bash(command), 2, command)
+        run("git", "checkout", "-q", "-b", "feature", cwd=self.p)
+        self.assertEqual(self.bash('git commit -m "x"'), 0)
+
+    def test_pushes_that_update_the_default_branch_are_blocked(self) -> None:
+        run("git", "commit", "-q", "--allow-empty", "-m", "init", cwd=self.p)
+        self.assertEqual(self.bash("git push"), 2)            # bare push from main
+        self.assertEqual(self.bash("git push origin main"), 2)
+        run("git", "checkout", "-q", "-b", "feature", cwd=self.p)
+        self.assertEqual(self.bash("git push -u origin feature"), 0)
+        self.assertEqual(self.bash("git push"), 0)            # bare push from a branch
+        for command in ("git push origin HEAD:main", "git push origin +feature:refs/heads/master",
+                        "git push --force origin main"):
+            self.assertEqual(self.bash(command), 2, command)
+
+    def test_other_shell_commands_and_other_repos_pass(self) -> None:
+        run("git", "commit", "-q", "--allow-empty", "-m", "init", cwd=self.p)
+        for command in ("npm test", "git status && git log -1", "echo 'git commit' > notes.txt",
+                        "git commit-tree HEAD^{tree} -m x", "git push --tags"):
+            self.assertEqual(self.bash(command), 0, command)
+        other = Path(tempfile.mkdtemp())
+        try:
+            run("git", "init", "-q", "-b", "main", cwd=other)
+            self.assertEqual(self.bash("git commit -m x", cwd=other), 0)
+            self.assertEqual(self.bash(f"git -C {other} commit -m x"), 0)
+        finally:
+            shutil.rmtree(other)
+
+    def test_unparseable_commands_fail_open(self) -> None:
+        run("git", "commit", "-q", "--allow-empty", "-m", "init", cwd=self.p)
+        self.assertEqual(self.bash("git commit -m 'unterminated"), 0)
 
 
 class KitConsistencyTests(unittest.TestCase):
