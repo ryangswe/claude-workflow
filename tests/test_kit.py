@@ -352,6 +352,26 @@ class CheckTests(unittest.TestCase):
         (self.p / "docs/decisions/orphan.md").write_text("# Orphan\n")
         self.assertIn("orphan.md is not named", self.failures())
 
+    def test_an_oversized_theme_file_fails_and_the_archive_is_ignored(self) -> None:
+        theme = self.p / "docs/decisions/process.md"
+        theme.write_text(theme.read_text() + "\n" + "x" * 41000 + "\n")
+        self.assertIn("process.md is", self.failures())
+        self.assertIn("over 40960", self.failures())
+        # Moving the bulk to the archive passes: the archive is not checked or named.
+        archive = self.p / "docs/decisions/archive"
+        archive.mkdir()
+        (archive / "process.md").write_text("x" * 100000 + "\n## 2020-01-01 — no status line\n")
+        theme.write_text(theme.read_text().replace("x" * 41000 + "\n", ""))
+        self.assertEqual(self.repo.check().returncode, 0, self.repo.check().stdout)
+
+    def test_the_theme_cap_is_off_when_unset(self) -> None:
+        cfg = self.p / ".claude/workflow.json"
+        cfg.write_text(json.dumps({k: v for k, v in json.loads(cfg.read_text()).items()
+                                   if k != "decisions_theme_max_bytes"}))
+        theme = self.p / "docs/decisions/process.md"
+        theme.write_text(theme.read_text() + "\n" + "x" * 41000 + "\n")
+        self.assertEqual(self.repo.check().returncode, 0, self.repo.check().stdout)
+
     def test_an_open_plan_missing_from_the_list_fails(self) -> None:
         (self.p / "docs/plans/2020-01-01-x.md").write_text("# X\n\n- **Status:** Draft\n")
         self.assertIn("missing from the active list", self.failures())
