@@ -1,0 +1,48 @@
+{
+  "name": "A-opus",
+  "about": "Baseline: the kit's reviewer and review checklists, Opus at high effort, through claude -p.",
+  "files": {
+    ".claude/agents/reviewer.md": "../../../plugins/workflow/kit/files/.claude/agents/reviewer.md",
+    ".claude/review-checklists.md": "../../../plugins/workflow/kit/files/.claude/review-checklists.md"
+  },
+  "frontmatter": {
+    "model": "opus",
+    "effort": "high"
+  },
+  "max_budget_usd": 5,
+  "timeout_s": 1800,
+  "output": "claude-json",
+  "command": [
+    "claude",
+    "-p",
+    "{brief}",
+    "--agents",
+    "{agents_file}",
+    "--agent",
+    "reviewer",
+    "--model",
+    "{model}",
+    "--effort",
+    "{effort}",
+    "--restricted",
+    "--tools",
+    "Read,Glob,Grep",
+    "--strict-mcp-config",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "dontAsk",
+    "--no-session-persistence",
+    "--max-budget-usd",
+    "{budget}",
+    "--allowedTools",
+    "Read",
+    "Glob",
+    "Grep"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep"
+  ]
+}

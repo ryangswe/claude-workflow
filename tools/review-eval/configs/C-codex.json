@@ -1,0 +1,21 @@
+{
+  "name": "C-codex",
+  "about": "The same reviewer text through Codex on the ChatGPT plan. UNVERIFIED: check the flags with `codex exec --help`, and run `review_eval.py probe` with this config: Codex's read-only sandbox may still read files outside the snapshot, which would let it see the fix.",
+  "files": {
+    ".claude/agents/reviewer.md": "../../../plugins/workflow/kit/files/.claude/agents/reviewer.md",
+    ".claude/review-checklists.md": "../../../plugins/workflow/kit/files/.claude/review-checklists.md"
+  },
+  "max_budget_usd": 5,
+  "timeout_s": 1800,
+  "output": "last-message",
+  "command": [
+    "codex",
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--skip-git-repo-check",
+    "--output-last-message",
+    "{last_message}",
+    "{reviewer_body}\n\n---\n\n{brief}"
+  ]
+}

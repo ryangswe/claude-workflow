@@ -1,0 +1,11 @@
+// The case format, one JSON object per line. Lines starting // are ignored. This file is an
+// example only: keep a private repository's real cases in that repository (for example
+// .claude/eval/review-cases.jsonl) and pass it with --cases, never here, since this repository
+// is public.
+//
+// A case is a PR (its merge commit) that introduced a bug a later commit fixed. anchors are where a
+// reviewer would have to point, as lines at the merge commit; "kind" is "lines" for code the fix
+// changed and "region" for an omission or an insertion point. run refuses a case until every anchor
+// says "checked": true. A control is a merged PR nothing later fixed; it has no anchors.
+{"id": "1", "set": "pilot", "pr": 12, "merge": "<40-hex merge commit>", "title": "Add retry to the uploader", "bug": "The retry loop never sleeps, so a down server gets thousands of requests a second", "fix": {"pr": 15, "commit": "<fix commit>"}, "anchors": [{"file": "src/upload.ts", "start": 40, "end": 52, "kind": "lines", "checked": false}], "note": "Optional: why an anchor was set by hand."}
+{"id": "c1", "set": "control", "pr": 9, "merge": "<40-hex merge commit>", "title": "Rename the config loader"}
