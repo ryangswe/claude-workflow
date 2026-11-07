@@ -112,33 +112,73 @@ def load_settings(target: Path) -> dict:
     return settings
 
 
-def merge_settings(target: Path, settings: dict, write: bool = True) -> str:
-    """Wire the branch-guard hook in .claude/settings.json, keeping everything already there.
+# Commands no agent session in a kit repository should run, and secrets it should not read. Deny
+# rules win over any allow at any scope, so these are kept few and unambiguous. Prefix matching is
+# a speed bump, not a boundary (`git push origin +main` is not caught): the remote's branch
+# protection and the sandbox are. A repository opts out of one by listing it under
+# "permissions_deny_opt_out" in .claude/workflow.json.
+DENY_RULES = [
+    "Bash(git push --force)",
+    "Bash(git push --force *)",
+    "Bash(git push -f)",
+    "Bash(git push -f *)",
+    "Bash(sudo *)",
+    "Read(**/.env)",
+    "Read(**/.env.*)",
+]
 
-    Adds the hook when it is missing, and widens a matcher an earlier kit wrote (file tools only)
-    to include Bash, so the guard also sees `git commit` and `git push`. A matcher the repository
-    wrote itself is left alone and reported.
+
+def deny_opt_out(target: Path) -> list:
+    try:
+        cfg = json.loads((target / ".claude" / "workflow.json").read_text(encoding="utf-8"))
+        return list(cfg.get("permissions_deny_opt_out", []))
+    except Exception:
+        return []
+
+
+def merge_settings(target: Path, settings: dict, write: bool = True) -> list:
+    """Bring .claude/settings.json up to the kit's baseline, keeping everything already there.
+
+    - Wires the branch-guard hook when it is missing, and widens a matcher an earlier kit wrote
+      (file tools only) to include Bash, so the guard also sees `git commit` and `git push`. A
+      matcher the repository wrote itself is left alone and reported.
+    - Adds any of DENY_RULES the repository has neither nor opted out of. Never removes a rule.
+
+    Returns one note per change ("merged ..."), "kept ..." when nothing changed, or "REVIEW ...".
+    With write=False nothing is written and changes read "would merge ...".
     """
+    notes = []
     pre = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
     groups = [g for g in pre
               if any("guard-default-branch.py" in h.get("command", "") for h in g.get("hooks", []))]
-    path = target / SETTINGS
     if not groups:
         pre.append(GUARD_HOOK)
-        message = "merged   .claude/settings.json (branch guard hook added)"
+        notes.append("merged   .claude/settings.json (branch guard hook added)")
     elif any("Bash" in g.get("matcher", "").split("|") for g in groups):
-        return "kept     .claude/settings.json (branch guard already wired)"
+        pass
     elif len(groups) == 1 and groups[0].get("matcher") in OLD_GUARD_MATCHERS:
         groups[0]["matcher"] = GUARD_MATCHER
-        message = "merged   .claude/settings.json (branch guard now also checks Bash commits and pushes)"
+        notes.append("merged   .claude/settings.json (branch guard now also checks Bash commits and pushes)")
     else:
-        return ("REVIEW    .claude/settings.json: the branch guard's matcher was changed here; add "
-                "Bash to it by hand so the guard sees `git commit` and `git push`")
+        notes.append("REVIEW    .claude/settings.json: the branch guard's matcher was changed here; add "
+                     "Bash to it by hand so the guard sees `git commit` and `git push`")
+
+    skip = set(deny_opt_out(target))
+    existing = settings.get("permissions", {}).get("deny", [])
+    missing = [r for r in DENY_RULES if r not in existing and r not in skip]
+    if missing:
+        settings.setdefault("permissions", {}).setdefault("deny", []).extend(missing)
+        notes.append(f"merged   .claude/settings.json (deny rules added: {', '.join(missing)})")
+
+    changed = any(n.startswith("merged") for n in notes)
+    if not changed:
+        return notes or ["kept     .claude/settings.json (already at the kit's baseline)"]
     if not write:
-        return "would " + message.replace("merged   ", "merge ")
+        return [n.replace("merged   ", "would merge ") for n in notes]
+    path = target / SETTINGS
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-    return message
+    return notes
 
 
 def write_managed(dest: Path, entry: dict, data: bytes) -> None:
@@ -175,7 +215,8 @@ def cmd_init(target: Path, level: str, force: bool) -> int:
         write_managed(dest, entry, data)
         lock["files"][entry["target"]] = sha(data)
         print(f"wrote    {entry['target']}")
-    print(merge_settings(target, settings))
+    for note in merge_settings(target, settings):
+        print(note)
     write_lock(target, lock)
     print(f"wrote    {LOCK} (kit {lock['kit']}, level {level})")
     return 1 if conflicts else 0
@@ -275,17 +316,17 @@ def cmd_sync(target: Path, apply: bool, level: str | None) -> int:
         if not reviews:
             lock["kit"] = kit_version()
         write_lock(target, lock)
-        settings_note = merge_settings(target, settings)
-        if upgraded or not settings_note.startswith("kept"):
-            print(settings_note)
+        for note in merge_settings(target, settings):
+            if upgraded or not note.startswith("kept"):
+                print(note)
         if upgraded:
             print(f"NOTE      CLAUDE.md is the repo's own, so it was not replaced: bring in what the "
                   f"{lock['level']} level adds (see the init skill's \"Moving up to full\").")
     else:
-        settings_note = merge_settings(target, json.loads(json.dumps(settings)), write=False)
-        if not settings_note.startswith("kept"):
-            print(settings_note)
-            pending += settings_note.startswith("would")
+        for note in merge_settings(target, json.loads(json.dumps(settings)), write=False):
+            if not note.startswith("kept"):
+                print(note)
+                pending += note.startswith("would")
         if pending:
             print("dry run: nothing written; re-run with --apply")
     if reviews:
