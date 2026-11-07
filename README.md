@@ -109,6 +109,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 |---|---|---|
 | `CLAUDE.md` skeleton (seeded) | short | adds orchestration, model routing, closeout |
 | Branch guard hook (no edits, commits or pushes on `main`/`master`) | ✓ | ✓ |
+| Deny baseline in `.claude/settings.json` (force-push, `sudo`, reading `.env` files) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
 | Review checklists (`.claude/review-checklists.md`: seven checklists the reviewer picks from) | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
@@ -176,6 +177,16 @@ Budgets and the branch guard's exempt folders live in `.claude/workflow.json`.
 The branch guard is a backstop for an agent that means to follow `CLAUDE.md`, not a security
 boundary: it parses simple shell commands and fails open. Protect the default branch on the
 remote too (GitHub branch protection or a ruleset: no direct pushes, required checks).
+
+`init` and `sync --apply` also add a small deny list to `.claude/settings.json`: `git push --force`
+/ `-f`, `sudo`, and reading `.env` / `.env.*` files. Use `--force-with-lease` to update your own
+feature branch after a rebase. Deny rules win over any allow at any scope, so the list stays short,
+and sync only ever adds to it. To drop one, delete it from `settings.json` and list it under
+`"permissions_deny_opt_out"` in `.claude/workflow.json`, or sync will put it back.
+
+The kit leaves Claude Code's bash sandbox off, because it can break SSH remotes, local dev
+servers and GPU tools. Turn it on per repository with `/sandbox` once you've checked that the
+repository's commands still work under it.
 
 ## Public repositories
 

@@ -253,6 +253,41 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"][0]["matcher"],
                          "Edit|MultiEdit")
 
+    def deny(self) -> list:
+        settings = json.loads((self.repo.path / ".claude/settings.json").read_text())
+        return settings.get("permissions", {}).get("deny", [])
+
+    def test_init_adds_the_deny_baseline(self) -> None:
+        self.assertIn("Bash(git push --force *)", self.deny())
+        self.assertIn("Read(**/.env)", self.deny())
+
+    def test_sync_adds_missing_deny_rules_once_and_keeps_the_repos_own(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        settings["permissions"]["deny"] = ["Bash(curl *)", "Bash(sudo *)"]
+        path.write_text(json.dumps(settings))
+        self.assertIn("would merge .claude/settings.json (deny rules added",
+                      self.repo.kit("sync").stdout)
+        self.repo.kit("sync", "--apply")
+        deny = self.deny()
+        self.assertEqual(deny[:2], ["Bash(curl *)", "Bash(sudo *)"])
+        self.assertEqual(deny.count("Bash(sudo *)"), 1)
+        self.assertIn("Bash(git push -f *)", deny)
+        self.repo.kit("sync", "--apply")
+        self.assertEqual(self.deny(), deny)  # a second sync changes nothing
+
+    def test_an_opted_out_deny_rule_is_not_restored(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        settings["permissions"]["deny"].remove("Read(**/.env)")
+        path.write_text(json.dumps(settings))
+        cfg = self.repo.path / ".claude/workflow.json"
+        cfg.write_text(json.dumps({**json.loads(cfg.read_text()),
+                                   "permissions_deny_opt_out": ["Read(**/.env)"]}))
+        self.repo.kit("sync", "--apply")
+        self.assertNotIn("Read(**/.env)", self.deny())
+        self.assertIn("Read(**/.env.*)", self.deny())
+
     def test_a_level_downgrade_is_refused(self) -> None:
         self.repo.kit("sync", "--level", "full", "--apply")
         self.assertNotEqual(self.repo.kit("sync", "--level", "light").returncode, 0)
