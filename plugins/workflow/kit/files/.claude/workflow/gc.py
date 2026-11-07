@@ -11,6 +11,9 @@ them as unmerged, which only means less gets removed).
 
 Every local branch other than the default one is put in one class:
 
+The default branch is read as origin/<default> when that ref exists (fetch first: the skill does),
+so a local default branch that is behind does not make merged work look unmerged.
+
 - MERGED: its tip is in the default branch's history (a merge commit or a fast-forward).
 - IN DEFAULT: merging it into the default branch would change nothing (`git merge-tree`), so its
   content landed some other way, usually a squash merge.
@@ -20,7 +23,9 @@ Every local branch other than the default one is put in one class:
 SAFE means MERGED or IN DEFAULT, and, if a worktree has it checked out, that worktree has no
 uncommitted or untracked changes and is not locked. `--apply` removes SAFE worktrees
 (`git worktree remove`, never forced) and deletes SAFE branches, after `git worktree prune`
-clears records of worktree folders that no longer exist. It never touches STALE or ACTIVE
+clears records of worktree folders that no longer exist. It refuses to run at all when every
+worktree's folder looks missing: that means this shell can't see the recorded paths, and a
+prune would drop the records of folders that are still there. It never touches STALE or ACTIVE
 branches, the default branch, the main checkout, or anything with uncommitted work: those are
 the owner's call, and the report lists them with their last commit.
 """
@@ -94,8 +99,16 @@ def dirty(path: str) -> int:
     return len(result.stdout.splitlines()) if result.returncode == 0 else -1
 
 
+def reference(root: Path, default: str) -> str:
+    """origin/<default> when it exists (it is usually newer than the local branch), else <default>."""
+    remote = f"refs/remotes/origin/{default}"
+    if git(root, "rev-parse", "--verify", "--quiet", remote, check=False).strip():
+        return f"origin/{default}"
+    return default
+
+
 def classify(root: Path, stale_days: int) -> tuple[str, list[dict]]:
-    default = default_branch(root)
+    default = reference(root, default_branch(root))
     trees = {w["branch"]: w for w in worktrees(root) if w["branch"]}
     main_branch = git(root, "branch", "--show-current").strip()
     now = time.time()
@@ -104,7 +117,7 @@ def classify(root: Path, stale_days: int) -> tuple[str, list[dict]]:
                "refs/heads/")
     for line in refs.splitlines():
         name, stamp, subject = (line.split("\t", 2) + ["", ""])[:3]
-        if name == default:
+        if name == default.removeprefix("origin/"):
             continue
         age = int((now - int(stamp or now)) // 86400)
         ancestor = subprocess.run(
@@ -139,6 +152,12 @@ def main() -> int:
     root = Path(args.root).resolve()
     try:
         if args.apply:
+            trees = worktrees(root)
+            if len(trees) > 1 and all(w["prunable"] for w in trees):
+                print("gc: every worktree's folder looks missing, which usually means this shell "
+                      "can't see the paths git recorded (a VM or container). Run gc on the machine "
+                      "that created them; nothing was changed.", file=sys.stderr)
+                return 1
             git(root, "worktree", "prune")
         default, rows = classify(root, args.stale_days)
     except RuntimeError as e:
@@ -159,7 +178,9 @@ def main() -> int:
         try:
             if r["worktree"] and os.path.isdir(r["worktree"]):
                 git(root, "worktree", "remove", r["worktree"])
-            git(root, "branch", "-d" if r["class"] == "MERGED" else "-D", r["branch"])
+            # -D: the classification above already proved the work is in the default branch,
+            # and -d would refuse a branch merged into origin/<default> but not the local one.
+            git(root, "branch", "-D", r["branch"])
             removed += 1
         except RuntimeError as e:
             print(f"      could not remove: {e}")

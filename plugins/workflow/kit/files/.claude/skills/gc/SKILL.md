@@ -8,10 +8,10 @@ description: Clean up what agent work leaves behind — worktrees and local bran
 `.claude/workflow/gc.py` decides what is safe; you only run it and report. Never remove anything
 by hand that the script did not mark `safe`.
 
-1. **Refresh what the default branch contains**, so squash-merged work is recognised:
-   `git fetch origin <default>:<default>` when the main checkout is on another branch, or
-   `git pull --ff-only` when it is on the default branch. If neither works, say so and go on: the
-   report will just call more branches unmerged.
+1. **Refresh what the default branch contains**, so merged and squash-merged work is recognised:
+   `git fetch origin`. The script compares against `origin/<default>`. If the fetch fails, say so
+   and go on: the report will just call more branches unmerged. Run gc on the machine whose
+   worktrees these are, not from a VM or container that sees the repository under another path.
 
 2. **Report:** `python3 .claude/workflow/gc.py`. It changes nothing. Each line is `safe` or `keep`,
    a class (MERGED, IN DEFAULT, STALE, ACTIVE), the age of the last commit, the branch and its

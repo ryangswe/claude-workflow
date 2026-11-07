@@ -448,6 +448,30 @@ class GcTests(unittest.TestCase):
         self.assertFalse((self.p / ".claude/worktrees/clean").exists())
         self.assertTrue((self.p / ".claude/worktrees/dirty/scratch.txt").exists())
 
+    def test_a_branch_merged_only_on_origin_counts_as_merged(self) -> None:
+        g = lambda *a: run("git", *a, cwd=self.p)  # noqa: E731
+        g("branch", "late", "active")
+        g("update-ref", "refs/remotes/origin/main", "main")
+        # origin/main moves on (the PR merged on GitHub); the local main does not
+        g("checkout", "-q", "--detach", "main")
+        g("merge", "-q", "--no-edit", "late")
+        g("update-ref", "refs/remotes/origin/main", "HEAD")
+        g("checkout", "-q", "main")
+        out = self.gc_run().stdout
+        self.assertIn("default branch: origin/main", out)
+        self.assertEqual(self.lines(out)["late"], "safe MERGED")
+        self.gc_run("--apply")
+        self.assertNotIn("late", self.branches())
+
+    def test_apply_refuses_when_no_worktree_folder_is_visible(self) -> None:
+        shutil.rmtree(self.p / ".claude/worktrees")
+        before = self.branches()
+        result = self.gc_run("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("can't see the paths", result.stderr)
+        self.assertEqual(self.branches(), before)
+        self.assertIn("worktrees/clean", run("git", "worktree", "list", cwd=self.p).stdout)
+
     def test_a_worktree_whose_folder_is_gone_is_pruned(self) -> None:
         shutil.rmtree(self.p / ".claude/worktrees/clean")
         self.gc_run("--apply")
