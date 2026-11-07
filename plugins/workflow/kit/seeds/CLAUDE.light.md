@@ -46,6 +46,8 @@ section only if there is truly nothing. -->
 - Ending a session mid-task, switching topic, or past ~300–400k tokens: run `/handoff` (the
   `handoff` skill). It records state in the repository and prints a short prompt for the next
   session. Don't let a conversation be the only place work's state lives.
+- Weekly, at a handoff, or when `.claude/worktrees/` piles up: run `/gc` (the `gc` skill) to remove
+  worktrees and branches whose work is already in the default branch.
 - For lookups, use the `Explore` agent (cheap, read-only) rather than reading large files yourself.
 
 <!-- Workflow kit (light). `workflow-kit sync` updates the managed files under .claude/; this file
