@@ -21,6 +21,12 @@ this section. -->
 - Record decisions a later session could plausibly reopen (direction, architecture, contracts,
   security, rejected alternatives): one line in the auto-loaded index @docs/decisions.md and the
   full entry in its `docs/decisions/<theme>.md`. The index header sets the format and budget.
+- **Size the task first, and say which lane in one line.** A *small change* (a few files, easy to
+  revert, and no change to a shared contract, security or privacy posture, or product behaviour)
+  takes the short lane: branch, change, `/checkpoint`, one `reviewer` pass, then a pull request
+  whose description ends with a `Decision:` line if one was made. No plan, no decisions-record
+  entry, no closeout. Anything bigger, or a small change that grows, takes the full process.
+  A `Decision:` line is promoted to the decisions record only if a later session could reopen it.
 - For large milestones, write the plan to `docs/plans/YYYY-MM-DD-<slug>.md` from
   `docs/plans/_template.md`, so a fresh session can execute it from the file alone. Keep its
   `Status:` line and the active list in `docs/plans/README.md` current.

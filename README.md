@@ -58,6 +58,11 @@ flowchart TB
   classDef muted fill:#ffffff,stroke:#9ca3af,stroke-width:1px,stroke-dasharray:4 3,color:#4b5563
 ```
 
+At either level, a small change (a few files, easy to revert, no shared contract, security or
+product-behaviour change) takes a short lane: branch, `/checkpoint`, one review, a pull request
+with a `Decision:` line if one was made. No plan, no decisions-record entry, no closeout. The
+ceremony is for work that can go wrong expensively, not for every edit.
+
 Model routing comes from each agent file's `model:` line: ROUTINE work goes to Sonnet (Haiku for
 lookups), STRONG to Opus, FRONTIER to Fable.
 
