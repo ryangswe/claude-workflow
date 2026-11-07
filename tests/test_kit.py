@@ -360,6 +360,102 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(run(sys.executable, str(self.guard), stdin=payload).returncode, 0)
 
 
+class GcTests(unittest.TestCase):
+    """gc.py on a repository with one branch of every kind."""
+
+    def setUp(self) -> None:
+        self.repo = Repo()
+        self.repo.kit("init", "--level", "light")
+        self.p = self.repo.path
+        self.gc = self.p / ".claude/workflow/gc.py"
+        g = lambda *a, **kw: run("git", *a, cwd=self.p, **kw)  # noqa: E731
+        (self.p / "a.txt").write_text("a\n")
+        g("add", "-A")
+        g("commit", "-qm", "init")
+        # merged: fast-forwarded into main
+        g("checkout", "-qb", "merged")
+        (self.p / "m.txt").write_text("m\n")
+        g("add", "m.txt")
+        g("commit", "-qm", "merged work")
+        g("checkout", "-q", "main")
+        g("merge", "-q", "--ff-only", "merged")
+        # squashed: its content landed on main as a different commit
+        g("checkout", "-qb", "squashed")
+        (self.p / "s.txt").write_text("s\n")
+        g("add", "s.txt")
+        g("commit", "-qm", "squash me 1")
+        (self.p / "s.txt").write_text("s2\n")
+        g("commit", "-qam", "squash me 2")
+        g("checkout", "-q", "main")
+        g("merge", "-q", "--squash", "squashed")
+        g("commit", "-qm", "squashed (#1)")
+        # stale: unmerged, last commit 30 days ago
+        g("checkout", "-qb", "stale")
+        (self.p / "old.txt").write_text("old\n")
+        g("add", "old.txt")
+        old = "2020-01-01T00:00:00"
+        subprocess.run(["git", "commit", "-qm", "old idea"], cwd=self.p, check=True,
+                       env={**os.environ, "GIT_AUTHOR_DATE": old, "GIT_COMMITTER_DATE": old})
+        g("checkout", "-q", "main")
+        # active: unmerged, recent
+        g("branch", "active")
+        g("checkout", "-q", "active")
+        (self.p / "new.txt").write_text("new\n")
+        g("add", "new.txt")
+        g("commit", "-qm", "new idea")
+        g("checkout", "-q", "main")
+        # worktrees: a clean merged one and a merged one with uncommitted work
+        g("branch", "wt-clean", "merged")
+        g("branch", "wt-dirty", "merged")
+        g("worktree", "add", "-q", ".claude/worktrees/clean", "wt-clean")
+        g("worktree", "add", "-q", ".claude/worktrees/dirty", "wt-dirty")
+        (self.p / ".claude/worktrees/dirty/scratch.txt").write_text("unsaved\n")
+
+    def tearDown(self) -> None:
+        self.repo.close()
+
+    def gc_run(self, *args: str) -> subprocess.CompletedProcess:
+        return run(sys.executable, str(self.gc), "--root", str(self.p), *args)
+
+    def lines(self, out: str) -> dict[str, str]:
+        rows = {}
+        for line in out.splitlines():
+            if line.startswith(("safe ", "keep ")):
+                parts = line.split()
+                cls = "IN DEFAULT" if parts[1] == "IN" else parts[1]
+                branch = parts[4] if cls == "IN DEFAULT" else parts[3]
+                rows[branch] = f"{parts[0]} {cls}"
+        return rows
+
+    def branches(self) -> set[str]:
+        out = run("git", "branch", "--format=%(refname:short)", cwd=self.p).stdout
+        return set(out.split())
+
+    def test_report_classifies_every_branch_and_changes_nothing(self) -> None:
+        before = self.branches()
+        result = self.gc_run()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.lines(result.stdout), {
+            "merged": "safe MERGED", "wt-clean": "safe MERGED", "squashed": "safe IN DEFAULT",
+            "wt-dirty": "keep MERGED", "stale": "keep STALE", "active": "keep ACTIVE"})
+        self.assertIn("uncommitted changes", result.stdout)
+        self.assertEqual(self.branches(), before)
+
+    def test_apply_removes_only_the_safe_ones(self) -> None:
+        result = self.gc_run("--apply")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.branches(), {"main", "wt-dirty", "stale", "active"})
+        self.assertFalse((self.p / ".claude/worktrees/clean").exists())
+        self.assertTrue((self.p / ".claude/worktrees/dirty/scratch.txt").exists())
+
+    def test_a_worktree_whose_folder_is_gone_is_pruned(self) -> None:
+        shutil.rmtree(self.p / ".claude/worktrees/clean")
+        self.gc_run("--apply")
+        listed = run("git", "worktree", "list", cwd=self.p).stdout
+        self.assertNotIn("worktrees/clean", listed)
+        self.assertNotIn("wt-clean", self.branches())
+
+
 class KitConsistencyTests(unittest.TestCase):
     def test_manifest_lists_every_kit_file_and_nothing_else(self) -> None:
         kit = PLUGIN / "kit"

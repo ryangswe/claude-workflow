@@ -113,6 +113,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 | Review checklists (`.claude/review-checklists.md`: seven checklists the reviewer picks from) | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
 | `handoff` skill (end a session into the repo, print a starting prompt) | ✓ | ✓ |
+| `gc` skill and `gc.py` (remove worktrees and branches already in the default branch) | ✓ | ✓ |
 | Decisions record (`docs/decisions.md` + theme files, status lines) | ✓ | ✓ |
 | Workflow check (`.claude/workflow/check.py`) | ✓ | ✓ |
 | `planner`, `architect` (Fable) and `executor` (Sonnet) agents | | ✓ |

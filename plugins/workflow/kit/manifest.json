@@ -72,6 +72,16 @@
       "executable": true
     },
     {
+      "target": ".claude/workflow/gc.py",
+      "source": ".claude/workflow/gc.py",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ],
+      "executable": true
+    },
+    {
       "target": ".claude/agents/explore.md",
       "source": ".claude/agents/explore.md",
       "mode": "managed",
@@ -110,6 +120,15 @@
     {
       "target": ".claude/skills/handoff/SKILL.md",
       "source": ".claude/skills/handoff/SKILL.md",
+      "mode": "managed",
+      "levels": [
+        "light",
+        "full"
+      ]
+    },
+    {
+      "target": ".claude/skills/gc/SKILL.md",
+      "source": ".claude/skills/gc/SKILL.md",
       "mode": "managed",
       "levels": [
         "light",

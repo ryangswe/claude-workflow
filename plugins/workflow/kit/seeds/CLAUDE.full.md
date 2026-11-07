@@ -97,6 +97,8 @@ profiles) and what a new worktree lacks, or delete this comment if none. -->
 - Ending a session mid-task, switching topic, or past ~300–400k tokens: run `/handoff` (the
   `handoff` skill). It records state in the repository and prints a short prompt for the next
   session. Don't let a conversation be the only place work's state lives.
+- Weekly, at a handoff, or when `.claude/worktrees/` piles up: run `/gc` (the `gc` skill) to remove
+  worktrees and branches whose work is already in the default branch.
 - **Close out:** the plan's `Status:` line and the active list; the execution log compressed into
   the completion summary with its lesson or `NO_ENTRY`; decision lines that meet the index bar; a
   short summary for the owner.
