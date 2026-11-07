@@ -176,6 +176,9 @@ check, commit). `status`, `sync [--apply] [--level full]`, `resolve` and `exclud
   heading and every detail entry opens with a status line; every index line's date is backed by
   an entry marked `live, indexed` in its theme file, and every such entry by a line of its date.
   The match is by date, so several same-date lines can rest on one entry.
+- Each decisions theme file stays under `decisions_theme_max_bytes` (40 KB for new repositories;
+  off unless set). Entries that no longer apply move to `docs/decisions/archive/`, which is not
+  loaded or checked.
 - The plans' active list agrees with each plan's `Status:` line.
 
 Budgets and the branch guard's exempt folders live in `.claude/workflow.json`.

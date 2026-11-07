@@ -22,6 +22,8 @@ anything the code already shows.
   `docs/decisions/<theme>.md` as `## YYYY-MM-DD — <decision>`, newest first, `---` between
   entries. Start a new theme file only if none fits, and add its section here.
 - The whole index stays under 20 KB. Near it, prune lines first.
+- Each theme file stays under 40 KB. Near it, move superseded, withdrawn and record entries to
+  `docs/decisions/archive/<theme>.md`, which nothing loads; git keeps them findable either way.
 
 ---
 
