@@ -1,0 +1,48 @@
+{
+  "name": "B-sonnet",
+  "about": "The same reviewer on Sonnet at medium effort.",
+  "files": {
+    ".claude/agents/reviewer.md": "../../../plugins/workflow/kit/files/.claude/agents/reviewer.md",
+    ".claude/review-checklists.md": "../../../plugins/workflow/kit/files/.claude/review-checklists.md"
+  },
+  "frontmatter": {
+    "model": "sonnet",
+    "effort": "medium"
+  },
+  "max_budget_usd": 5,
+  "timeout_s": 1800,
+  "output": "claude-json",
+  "command": [
+    "claude",
+    "-p",
+    "{brief}",
+    "--agents",
+    "{agents_file}",
+    "--agent",
+    "reviewer",
+    "--model",
+    "{model}",
+    "--effort",
+    "{effort}",
+    "--restricted",
+    "--tools",
+    "Read,Glob,Grep",
+    "--strict-mcp-config",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "dontAsk",
+    "--no-session-persistence",
+    "--max-budget-usd",
+    "{budget}",
+    "--allowedTools",
+    "Read",
+    "Glob",
+    "Grep"
+  ],
+  "tools": [
+    "Read",
+    "Glob",
+    "Grep"
+  ]
+}

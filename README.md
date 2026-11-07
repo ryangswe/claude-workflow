@@ -144,8 +144,8 @@ In Claude Code:
 /plugin install workflow@claude-workflow
 ```
 
-The repository is private, so git on that machine must already have access (`gh auth login` and
-`gh auth setup-git`, or an SSH key). Auto-update is off for your own marketplaces by default:
+If the repository is private, git on that machine must already have access (`gh auth login` and
+`gh auth setup-git`, or an SSH key). It is public today: keep anything private out of it. Auto-update is off for your own marketplaces by default:
 turn it on in `/plugin` → Marketplaces, or run `/plugin marketplace update claude-workflow`.
 
 Then, in any repository:
@@ -214,3 +214,9 @@ reaches other machines.
 - `python3 -m unittest discover -s tests` runs the tests (standard library only).
 - `claude plugin validate .` and `claude plugin validate ./plugins/workflow` check the manifests.
 - The plugin has no `version`, so installs track the latest commit.
+
+## Measuring the reviewer
+
+`tools/review-eval/` replays PRs that introduced bugs a later commit fixed, in a snapshot with no
+later history, and counts whether a reviewer config flags each bug's lines. It is not synced into
+repositories; it runs where the target checkout is. See its README.
