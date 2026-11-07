@@ -157,7 +157,15 @@ def merge_settings(target: Path, settings: dict, write: bool = True) -> list:
     elif any("Bash" in g.get("matcher", "").split("|") for g in groups):
         pass
     elif len(groups) == 1 and groups[0].get("matcher") in OLD_GUARD_MATCHERS:
-        groups[0]["matcher"] = GUARD_MATCHER
+        group = groups[0]
+        guard = [h for h in group["hooks"] if "guard-default-branch.py" in h.get("command", "")]
+        if len(guard) == len(group["hooks"]):
+            group["matcher"] = GUARD_MATCHER
+        else:
+            # The group holds the repository's own hooks too: widening its matcher would start
+            # running them on every Bash call. Move the guard into a group of its own instead.
+            group["hooks"] = [h for h in group["hooks"] if h not in guard]
+            pre.insert(pre.index(group), {"matcher": GUARD_MATCHER, "hooks": guard})
         notes.append("merged   .claude/settings.json (branch guard now also checks Bash commits and pushes)")
     else:
         notes.append("REVIEW    .claude/settings.json: the branch guard's matcher was changed here; add "

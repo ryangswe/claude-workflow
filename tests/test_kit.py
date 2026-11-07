@@ -244,6 +244,23 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"][0]["matcher"],
                          "Edit|Write|NotebookEdit|Bash")
 
+    def test_widening_never_puts_the_repos_own_hooks_on_bash(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        group = settings["hooks"]["PreToolUse"][0]
+        group["matcher"] = "Edit|Write|NotebookEdit"
+        own = {"type": "command", "command": "python3 .claude/hooks/own-check.py"}
+        group["hooks"].append(own)
+        path.write_text(json.dumps(settings))
+        self.repo.kit("sync", "--apply")
+        pre = json.loads(path.read_text())["hooks"]["PreToolUse"]
+        by_matcher = {g["matcher"]: [h["command"] for h in g["hooks"]] for g in pre}
+        self.assertEqual(by_matcher["Edit|Write|NotebookEdit"], [own["command"]])
+        self.assertEqual(len(by_matcher["Edit|Write|NotebookEdit|Bash"]), 1)
+        self.assertIn("guard-default-branch.py", by_matcher["Edit|Write|NotebookEdit|Bash"][0])
+        self.repo.kit("sync", "--apply")  # a second sync changes nothing
+        self.assertEqual(json.loads(path.read_text())["hooks"]["PreToolUse"], pre)
+
     def test_a_hand_changed_guard_matcher_is_reported_not_rewritten(self) -> None:
         path = self.repo.path / ".claude/settings.json"
         settings = json.loads(path.read_text())
