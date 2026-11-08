@@ -303,7 +303,29 @@ class SyncTests(unittest.TestCase):
                                    "permissions_deny_opt_out": ["Read(**/.env)"]}))
         self.repo.kit("sync", "--apply")
         self.assertNotIn("Read(**/.env)", self.deny())
-        self.assertIn("Read(**/.env.*)", self.deny())
+        self.assertIn("Read(**/.env.local)", self.deny())
+
+    def test_init_leaves_env_templates_readable(self) -> None:
+        deny = self.deny()
+        self.assertIn("Read(**/.env.*.local)", deny)
+        self.assertNotIn("Read(**/.env.*)", deny)  # would also hide .env.example
+
+    def test_sync_removes_a_retired_deny_rule_and_keeps_the_rest(self) -> None:
+        path = self.repo.path / ".claude/settings.json"
+        settings = json.loads(path.read_text())
+        settings["permissions"]["deny"] = ["Bash(curl *)", "Read(**/.env.*)", "Bash(sudo *)"]
+        path.write_text(json.dumps(settings))
+        dry = self.repo.kit("sync").stdout
+        self.assertIn("would merge .claude/settings.json (retired deny rules removed: "
+                      "Read(**/.env.*)", dry)
+        self.assertIn("Read(**/.env.*)", self.deny())  # a dry run writes nothing
+        self.repo.kit("sync", "--apply")
+        deny = self.deny()
+        self.assertNotIn("Read(**/.env.*)", deny)
+        self.assertEqual(deny[:2], ["Bash(curl *)", "Bash(sudo *)"])
+        self.assertIn("Read(**/.env.production)", deny)
+        self.repo.kit("sync", "--apply")
+        self.assertEqual(self.deny(), deny)  # a second sync changes nothing
 
     def test_a_level_downgrade_is_refused(self) -> None:
         self.repo.kit("sync", "--level", "full", "--apply")

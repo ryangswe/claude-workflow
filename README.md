@@ -114,7 +114,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 |---|---|---|
 | `CLAUDE.md` skeleton (seeded) | short | adds orchestration, model routing, closeout |
 | Branch guard hook (no edits, commits or pushes on `main`/`master`) | ✓ | ✓ |
-| Deny baseline in `.claude/settings.json` (force-push, `sudo`, reading `.env` files) | ✓ | ✓ |
+| Deny baseline in `.claude/settings.json` (force-push, `sudo`, reading local and production `.env` files) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
 | Review checklists (`.claude/review-checklists.md`: seven checklists the reviewer picks from) | ✓ | ✓ |
 | `checkpoint` skill | ✓ | ✓ |
@@ -188,10 +188,14 @@ boundary: it parses simple shell commands and fails open. Protect the default br
 remote too (GitHub branch protection or a ruleset: no direct pushes, required checks).
 
 `init` and `sync --apply` also add a small deny list to `.claude/settings.json`: `git push --force`
-/ `-f`, `sudo`, and reading `.env` / `.env.*` files. Use `--force-with-lease` to update your own
-feature branch after a rebase. Deny rules win over any allow at any scope, so the list stays short,
-and sync only ever adds to it. To drop one, delete it from `settings.json` and list it under
-`"permissions_deny_opt_out"` in `.claude/workflow.json`, or sync will put it back.
+/ `-f`, `sudo`, and reading `.env`, `.env.local`, `.env.*.local` and `.env.production`. Use
+`--force-with-lease` to update your own feature branch after a rebase. The env rules name the files
+that hold real values rather than `.env.*`, which would also hide tracked templates such as
+`.env.example` that agents edit; add any other secret-holding name your repository uses. Deny rules
+win over any allow at any scope, so the list stays short. Sync adds missing rules and removes only
+rules an earlier kit added and has since withdrawn (`Read(**/.env.*)`), saying so in its output. To
+drop one, delete it from `settings.json` and list it under `"permissions_deny_opt_out"` in
+`.claude/workflow.json`, or sync will put it back.
 
 The kit leaves Claude Code's bash sandbox off, because it can break SSH remotes, local dev
 servers and GPU tools. Turn it on per repository with `/sandbox` once you've checked that the
