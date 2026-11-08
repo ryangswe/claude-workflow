@@ -116,7 +116,8 @@ def load_settings(target: Path) -> dict:
 # rules win over any allow at any scope, so these are kept few and unambiguous. Prefix matching is
 # a speed bump, not a boundary (`git push origin +main` is not caught): the remote's branch
 # protection and the sandbox are. A repository opts out of one by listing it under
-# "permissions_deny_opt_out" in .claude/workflow.json.
+# "permissions_deny_opt_out" in .claude/workflow.json. The env-file rules name the files that hold
+# real values; a wider `.env.*` would also hide the tracked templates (.env.example) agents edit.
 DENY_RULES = [
     "Bash(git push --force)",
     "Bash(git push --force *)",
@@ -124,8 +125,17 @@ DENY_RULES = [
     "Bash(git push -f *)",
     "Bash(sudo *)",
     "Read(**/.env)",
-    "Read(**/.env.*)",
+    "Read(**/.env.local)",
+    "Read(**/.env.*.local)",
+    "Read(**/.env.production)",
 ]
+
+# Rules an earlier kit added and has since withdrawn, with the reason. Sync removes them wherever it
+# finds them and says so: a deny rule cannot be overridden by an allow, so leaving one in place
+# would keep the problem it was withdrawn for.
+RETIRED_DENY_RULES = {
+    "Read(**/.env.*)": "it also hid tracked templates such as .env.example",
+}
 
 
 def deny_opt_out(target: Path) -> list:
@@ -142,7 +152,8 @@ def merge_settings(target: Path, settings: dict, write: bool = True) -> list:
     - Wires the branch-guard hook when it is missing, and widens a matcher an earlier kit wrote
       (file tools only) to include Bash, so the guard also sees `git commit` and `git push`. A
       matcher the repository wrote itself is left alone and reported.
-    - Adds any of DENY_RULES the repository has neither nor opted out of. Never removes a rule.
+    - Adds any of DENY_RULES the repository has neither nor opted out of, and removes the rules
+      in RETIRED_DENY_RULES that an earlier kit added. No other rule is ever removed.
 
     Returns one note per change ("merged ..."), "kept ..." when nothing changed, or "REVIEW ...".
     With write=False nothing is written and changes read "would merge ...".
@@ -173,6 +184,11 @@ def merge_settings(target: Path, settings: dict, write: bool = True) -> list:
 
     skip = set(deny_opt_out(target))
     existing = settings.get("permissions", {}).get("deny", [])
+    retired = [r for r in existing if r in RETIRED_DENY_RULES]
+    if retired:
+        settings["permissions"]["deny"] = existing = [r for r in existing if r not in retired]
+        reasons = "; ".join(f"{r}: {RETIRED_DENY_RULES[r]}" for r in retired)
+        notes.append(f"merged   .claude/settings.json (retired deny rules removed: {reasons})")
     missing = [r for r in DENY_RULES if r not in existing and r not in skip]
     if missing:
         settings.setdefault("permissions", {}).setdefault("deny", []).extend(missing)
