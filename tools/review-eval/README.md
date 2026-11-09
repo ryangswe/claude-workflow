@@ -17,7 +17,10 @@ reviewers' logins (`claude`, and `codex` for config C).
   This repository is public; a private repository's commit ids, paths and bug descriptions never
   belong here.
 - `configs/*.json`: one reviewer setup each: the files installed into the snapshot, the model and
-  effort, and the command. `A-opus` is the baseline.
+  effort, and the command. `A-opus` is the baseline: the kit's reviewer and checklists as they are.
+- `candidates/<name>/`: a changed reviewer or checklist to measure before it goes into the kit,
+  installed by a config of the same idea (`A-calibrated` uses `candidates/calibrated/`). When a
+  candidate wins, its change moves into `plugins/workflow/kit/files/` and the folder goes.
 - `runs/` (gitignored, under the folder you run from): `run-N.json` per finished run, with the
   reviewer's full text, parsed findings, cost, time and the models used; `error-N.json` for a run
   that failed for reasons outside the review (see below).
