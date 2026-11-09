@@ -63,8 +63,8 @@ product-behaviour change) takes a short lane: branch, `/checkpoint`, one review,
 with a `Decision:` line if one was made. No plan, no decisions-record entry, no closeout. The
 ceremony is for work that can go wrong expensively, not for every edit.
 
-Model routing comes from each agent file's `model:` line: ROUTINE work goes to Sonnet (Haiku for
-lookups), STRONG to Opus, FRONTIER to Fable.
+Each agent's model and effort come from its agent file's `model:` and `effort:` lines; the lead
+runs on Opus.
 
 ### Light: one session, guard rails around it
 
@@ -112,7 +112,7 @@ decisions, plans, handoffs), when to hand off, and how an unattended run survive
 
 | | light | full |
 |---|---|---|
-| `CLAUDE.md` skeleton (seeded) | short | adds orchestration, model routing, closeout |
+| `CLAUDE.md` skeleton (seeded) | short | adds orchestration, the lead's model, closeout |
 | Branch guard hook (no edits, commits or pushes on `main`/`master`) | ✓ | ✓ |
 | Deny baseline in `.claude/settings.json` (force-push, `sudo`, reading local and production `.env` files) | ✓ | ✓ |
 | `reviewer` (Opus) and `Explore` (Haiku) agents | ✓ | ✓ |
