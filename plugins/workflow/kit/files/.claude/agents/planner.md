@@ -31,8 +31,8 @@ Follow `docs/plans/_template.md`. At minimum:
 3. **Risks and open questions**: anything that needs the owner's decision before work starts.
    Ask; don't assume.
 4. **Tasks**: small, separately verifiable units in order, each with dependencies, success
-   criteria and verification. Give the owner's total hours (reviews, live checks, labelling,
-   decisions) in the header.
+   criteria and verification. When the work needs the owner's time (reviews, live checks,
+   labelling, decisions), give the total hours in the header.
 5. **Concurrency**, only when tasks will run at the same time: the table from the
    `parallel-work` skill.
 
