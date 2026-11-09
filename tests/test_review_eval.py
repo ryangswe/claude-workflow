@@ -295,6 +295,51 @@ class GradeTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp)
 
+    def write_runs(self, tmp: Path, findings_by_run: list[list[dict]], cid: str = "1") -> None:
+        d = tmp / "X" / cid
+        d.mkdir(parents=True, exist_ok=True)
+        for n, fs in enumerate(findings_by_run, 1):
+            (d / f"run-{n}.json").write_text(json.dumps(
+                {"case": cid, "config": "X", "findings": fs, "seconds": 1, "started": f"t{n}"}))
+
+    def test_matches_lists_the_deciding_finding_the_other_severe_ones_and_a_verdict_line(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            elsewhere = {**self.f("major"), "file": "other.py", "title": "names the bug elsewhere"}
+            self.write_runs(tmp, [[self.f("major"), elsewhere], [elsewhere]])
+            out = ev.matches([{**self.case, "set": "pilot"}], tmp)
+            first, second = out.strip().split("\n\n")
+            self.assertIn("X case 1 run 1: catch", first)
+            self.assertIn("matched: [major] app.py", first)
+            self.assertIn("severe:  [major] other.py", first)
+            self.assertIn("X case 1 run 2: miss", second)
+            line = json.loads(second.splitlines()[-1])
+            self.assertEqual(line, {"config": "X", "case": "1", "run": 2, "started": "t2",
+                                    "verdict": "miss"})
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_report_uses_a_verdict_only_for_the_run_it_was_made_on(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            case = {**self.case, "set": "pilot"}
+            self.write_runs(tmp, [[], [], [self.f("major")]])
+            self.assertIn("| 1 | pilot | 1/3 |", ev.report([case], tmp))
+            self.assertIn("3 of 3 case runs are graded by line only", ev.report([case], tmp))
+            vfile = tmp / "verdicts.jsonl"
+            vfile.write_text("// checked by hand\n" + "\n".join(json.dumps(v) for v in [
+                {"config": "X", "case": "1", "run": 1, "started": "t1", "verdict": "catch"},
+                {"config": "X", "case": "1", "run": 2, "started": "redone", "verdict": "catch"},
+                {"config": "X", "case": "1", "run": 3, "started": "t3", "verdict": "miss"}]) + "\n")
+            table = ev.report([case], tmp, verdicts=ev.load_verdicts(vfile))
+            self.assertIn("| 1 | pilot | 1/3 |", table)  # run 1 now a catch, run 3 a miss, run 2 lapsed
+            self.assertIn("1 of 3 case runs are graded by line only", table)
+            vfile.write_text(json.dumps({"config": "X", "case": "1", "run": 1, "verdict": "maybe"}))
+            with self.assertRaises(SystemExit):
+                ev.load_verdicts(vfile)
+        finally:
+            shutil.rmtree(tmp)
+
     def test_controls_count_severe_findings(self) -> None:
         r = ev.grade_run({"id": "c1", "set": "control"}, [self.f("major"), self.f("minor")])
         self.assertEqual(r, {"outcome": "control", "severe": 1})

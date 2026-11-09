@@ -54,10 +54,15 @@ reviewers' logins (`claude`, and `codex` for config C).
   Each run records `model_usage`, so the report can be checked against the model meant to run.
 - **Anchors are checked by a person.** `run` refuses a case whose anchors are not all marked
   `"checked": true`, unless `--allow-unchecked` (whose results are not comparable).
-- **Known answers, not a judge.** A run catches a case when a Critical or Major finding names an
-  anchor's file within 10 lines of it. A Minor match is "seen". A finished run with no parseable
-  findings list is a miss, reported as unparsed. A timeout or a budget stop is the reviewer's own
-  outcome and counts.
+- **Known answers, then a person's check.** A run catches a case when a Critical or Major finding
+  names an anchor's file within 10 lines of it. A Minor match is "seen". A finished run with no
+  parseable findings list is a miss, reported as unparsed. A timeout or a budget stop is the
+  reviewer's own outcome and counts. A line match says where a finding points, not what it says: a
+  finding about something else can land near an anchor, and one that names the bug can point where
+  the fix went. So `matches` lists, for each graded run, the finding that decided it and the run's
+  other severe findings, and a person records a verdict per run in a verdicts file kept beside the
+  cases. `report --verdicts` uses a verdict in place of the line grade, for the run it was made on
+  only (a redone run needs a new one), and says how many runs are still graded by line alone.
 - **Failures are not misses.** A run whose command failed (a usage limit, a crash, a login
   problem) is written as `error-N.json`, ignored by the report and retried by the next `run`.
   Three in a row stop the run.
@@ -81,7 +86,12 @@ python3 review_eval.py run --repo <checkout> --cases <cases.jsonl> \
 python3 review_eval.py run --repo <checkout> --cases <cases.jsonl> \
   --config configs/A-opus.json --set pilot --set control --runs 3
 
-python3 review_eval.py report --cases <cases.jsonl>
+# What each case run was graded on, with a verdict line per run to copy into the verdicts file
+# (for example .claude/eval/review-verdicts.jsonl beside the cases) and correct where the line
+# grade is wrong.
+python3 review_eval.py matches --cases <cases.jsonl> --config A-opus
+
+python3 review_eval.py report --cases <cases.jsonl> --verdicts <verdicts.jsonl>
 ```
 
 `max_budget_usd` in a config caps each Claude run and `timeout_s` its wall time. When `claude` is
