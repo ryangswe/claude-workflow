@@ -39,9 +39,16 @@ Independently verifiable units, in order. Separate tasks do not imply separate a
   - <observable or testable result>
 - **Verification:**
   - `<narrow command or manual check>`
+- **Model:** <optional: only when the task needs more than its agent's default, such as
+  `executor` on Opus, and why>
+- **Escalate if:** <optional: a condition specific to this task, beyond the executor's own rules>
+- **Parallel with:** <optional: T<n>, ...; the plan then needs the concurrency table>
 
-<!-- Copy the task block as needed. When tasks will run at the same time, add the concurrency
-table from the parallel-work skill. Delete unused examples before approval. -->
+<!-- Copy the task block as needed. Model, Escalate if and Parallel with are for larger plans,
+with several delegated tasks or work that runs at the same time; leave them out otherwise. The
+lead dispatches the task on the model named and copies the escalation conditions into the
+worker's brief. When tasks will run at the same time, add the concurrency table from the
+parallel-work skill. Delete unused examples before approval. -->
 
 The execution log lives beside this file, in `<this plan's name>-log.md` (see the plans README).
 

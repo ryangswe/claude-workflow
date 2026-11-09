@@ -65,7 +65,7 @@ paid services and infrastructure. -->
 - **The lead runs on Opus at high effort**, chosen at the start of a session and not switched
   during it. Each model has its own prompt cache, so a switch re-reads the whole conversation
   uncached; ask `architect`, or start a session. Each agent's model and effort are set in its
-  agent file.
+  agent file; when a plan task names a stronger model, dispatch it on that one.
 - **Keep the lead's context small.** The lead does not read a decisions theme file or a plan over
   ~30 KB itself; `Explore` fetches the entry or task it needs.
 
