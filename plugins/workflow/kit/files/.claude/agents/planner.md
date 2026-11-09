@@ -33,7 +33,11 @@ Follow `docs/plans/_template.md`. At minimum:
 4. **Tasks**: small, separately verifiable units in order, each with dependencies, success
    criteria and verification. When the work needs the owner's time (reviews, live checks,
    labelling, decisions), give the total hours in the header.
-5. **Concurrency**, only when tasks will run at the same time: the table from the
+5. **For larger plans** (several delegated tasks, or work that runs at the same time), the
+   template's optional task fields: a **Model** when a task needs more than its agent's default
+   (for example `executor` on Opus for a subtle concurrency or data-migration change),
+   **Escalate if** for conditions specific to one task, and **Parallel with**.
+6. **Concurrency**, only when tasks will run at the same time: the table from the
    `parallel-work` skill.
 
 Make the plan concrete enough that a fresh session, possibly on another model, can execute it from
