@@ -43,17 +43,16 @@ live there, and the reviewer's checklists in `.claude/review-checklists.md`.
 
 - **Milestone specs: do not edit files until the architecture and the first small change are
   explained and approved.** Inspect read-only first.
-- Decompose work into tasks with dependencies, complexity class, success criteria, escalation
-  conditions and verification. **Price every task in the owner's hours**: they are the scarcest
-  resource.
+- Decompose work into tasks with dependencies, success criteria and verification. **Price the
+  work in the owner's hours**: they are the scarcest resource.
 - Work directly when a task is small, tightly coupled or cheaper to do than to brief. Delegate when
   work can run concurrently, is self-contained, would flood the lead's context, or needs a fresh
   judgment. Every worker gets a bounded task and ends with SUCCESS, ESCALATE or BLOCKED; on
   ESCALATE or BLOCKED, stop the tasks that depend on it and update the plan.
-- Present the task graph, delegation, model classes and approval gates **before dispatching
-  code-writing workers**, unless the owner has authorised autonomous work. Read-only workers need
-  no approval. Ask before anything that changes product behaviour, architecture, compatibility,
-  security or privacy posture, production data, scope or cost.
+- Present the task graph, delegation and approval gates **before dispatching code-writing
+  workers**, unless the owner has authorised autonomous work. Read-only workers need no approval.
+  Ask before anything that changes product behaviour, architecture, compatibility, security or
+  privacy posture, production data, scope or cost.
 
 ### Owner-only actions (each time, never implied by plan approval)
 
@@ -61,27 +60,14 @@ live there, and the reviewer's checklists in `.claude/review-checklists.md`.
 paid services and infrastructure. -->
 - Merging into the default branch.
 
-### Model routing
+### Models
 
-**The lead runs on Opus at high effort**, chosen at the start of a session. Plans name capability
-classes; map them at dispatch: ROUTINE → Sonnet (Haiku for lookups), STRONG → Opus, FRONTIER →
-Fable. Update the mapping when models change.
-
-| Agent | Default | Use |
-|---|---|---|
-| `Explore` | Haiku, low | code search; fetching one decision entry, plan task or doc section |
-| `executor` | Sonnet, medium | ROUTINE tasks; override to Opus for STRONG |
-| `reviewer` | Opus, high | every review; Sonnet only for ROUTINE-only work |
-| `planner` | Fable, high | milestone plans, re-plans after an ESCALATE |
-| `architect` | Fable, high | judgement calls mid-task; resume it with `SendMessage` for follow-ups |
-
-- Call FRONTIER where it pays: a milestone plan, a rule or bar set before measuring, a re-plan, a
-  result the lead cannot explain, a root cause after two strikes.
+- **The lead runs on Opus at high effort**, chosen at the start of a session and not switched
+  during it. Each model has its own prompt cache, so a switch re-reads the whole conversation
+  uncached; ask `architect`, or start a session. Each agent's model and effort are set in its
+  agent file.
 - **Keep the lead's context small.** The lead does not read a decisions theme file or a plan over
   ~30 KB itself; `Explore` fetches the entry or task it needs.
-- **Don't switch the lead's model or effort mid-session**: each model has its own prompt cache, so
-  the next turn re-reads the whole conversation uncached. Ask `architect`, or start a session.
-- Never set `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`: it ignores the agent files' `model`.
 
 ### Concurrency
 
@@ -106,8 +92,7 @@ profiles) and what a new worktree lacks, or delete this comment if none. -->
 - Weekly, at a handoff, or when `.claude/worktrees/` piles up: run `/gc` (the `gc` skill) to remove
   worktrees and branches whose work is already in the default branch.
 - **Close out:** the plan's `Status:` line and the active list; the execution log compressed into
-  the completion summary with its lesson or `NO_ENTRY`; decision lines that meet the index bar; a
-  short summary for the owner.
+  the completion summary; decision lines that meet the index bar; a short summary for the owner.
 - **Bugs already on the default branch:** the fix's PR description carries one `Missed by:` line
   per bug, naming the check that should have caught it, and the fix adds that check (review
   checklist 7).
