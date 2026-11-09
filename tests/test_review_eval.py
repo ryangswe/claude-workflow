@@ -121,6 +121,26 @@ class SnapshotTests(Fixture):
         self.config["files"][".claude/review-checklists.md"] = None
         self.assertFalse((self.snapshot() / ".claude/review-checklists.md").exists())
 
+    def test_a_same_size_rewrite_with_matching_stat_data_is_still_committed(self) -> None:
+        # Both commits share a date, so git archive gives both versions the same mtime. With
+        # checkStat=minimal and no ctime, git compares only that mtime and the size, so a stale
+        # index would call the rewritten file unchanged and drop it from the PR commit.
+        (self.repo / "same.txt").write_text("aaaa\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-qm", "before", date="2020-01-01T00:00:00Z")
+        base = git(self.repo, "rev-parse", "HEAD")
+        (self.repo / "same.txt").write_text("bbbb\n")
+        git(self.repo, "commit", "-qam", "Rewrite (#5)", date="2020-01-01T00:00:00Z")
+        case = {**self.case, "base": base, "merge": git(self.repo, "rev-parse", "HEAD")}
+        stat = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "core.checkStat",
+                "GIT_CONFIG_VALUE_0": "minimal", "GIT_CONFIG_KEY_1": "core.trustCtime",
+                "GIT_CONFIG_VALUE_1": "false"}
+        dest = self.tmp / "snap"
+        with unittest.mock.patch.dict(os.environ, stat):
+            ev.build_snapshot(self.repo, case, self.config, self.cfgdir, dest)
+        self.assertEqual(git(dest, "show", "HEAD:same.txt"), "bbbb")
+        self.assertEqual(git(dest, "diff", "--name-only", "HEAD^", "HEAD"), "same.txt")
+
 
 class ReviewFileTests(Fixture):
     def test_the_reviewer_gets_the_diff_message_and_base_files_without_git(self) -> None:
