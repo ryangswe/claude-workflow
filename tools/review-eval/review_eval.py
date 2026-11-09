@@ -370,16 +370,74 @@ def grade_run(case: dict, findings: list[dict] | None, tolerance: int = 10) -> d
     severe = sum(1 for f in findings if f["severity"] in SEVERE)
     if case.get("set") == "control":
         return {"outcome": "control", "severe": severe}
-    outcome = "miss"
+    outcome, match = "miss", None
     for f in findings:
         for a in case.get("anchors", []):
             if f["file"] != a["file"] or not f["line_start"]:
                 continue
             if f["line_start"] <= a["end"] + tolerance and f["line_end"] >= a["start"] - tolerance:
                 if f["severity"] in SEVERE:
-                    return {"outcome": "catch", "severe": severe}
-                outcome = "seen"
-    return {"outcome": outcome, "severe": severe}
+                    return {"outcome": "catch", "severe": severe, "match": f}
+                if match is None:
+                    outcome, match = "seen", f
+    return {"outcome": outcome, "severe": severe, "match": match}
+
+
+# A line match says where a finding points, not what it says: a finding about something else can land
+# near an anchor, and a finding that names the bug can point where the fix went instead. A person
+# reads each graded run (`matches`) and records a verdict; `report` uses it in place of the grade.
+VERDICTS = {"catch", "seen", "miss"}
+
+
+def load_verdicts(path) -> dict[tuple[str, str, int], dict]:
+    """Verdicts by (config, case, run). Each line: config, case, run, started (the run record's,
+    so a verdict lapses when its run is redone), verdict (catch, seen or miss) and an optional note."""
+    out = {}
+    if not path:
+        return out
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("//"):
+            continue
+        v = json.loads(line)
+        if v.get("verdict") not in VERDICTS:
+            raise SystemExit(f"verdict must be one of {sorted(VERDICTS)}: {line}")
+        out[(v["config"], str(v["case"]), int(v["run"]))] = v
+    return out
+
+
+def _run_number(path: Path) -> int:
+    return int(path.stem.split("-")[1])
+
+
+def _describe(f: dict) -> str:
+    return f"[{f['severity']}] {f['file']}:{f['line_start']}-{f['line_end']} {f.get('title', '')}"
+
+
+def matches(cases: list[dict], runs_dir: Path, tolerance: int = 10, config: str | None = None) -> str:
+    """For each finished run of a case with anchors: its grade, the finding that decided it, and its
+    other severe findings (one may name the bug while pointing elsewhere), then a verdict line to
+    copy into the verdicts file and correct."""
+    blocks = []
+    order = {c["id"]: i for i, c in enumerate(cases)}
+    for f in sorted(runs_dir.glob("*/*/run-*.json"), key=lambda p: (p.parent.parent.name,
+                    order.get(p.parent.name, len(order)), p.parent.name, _run_number(p))):
+        rec = json.loads(f.read_text(encoding="utf-8"))
+        case = next((c for c in cases if c["id"] == rec["case"]), None)
+        if case is None or case.get("set") == "control" or (config and rec["config"] != config):
+            continue
+        g = grade_run(case, rec.get("findings"), tolerance)
+        n = _run_number(f)
+        lines = [f"{rec['config']} case {rec['case']} run {n}: {g['outcome']}"]
+        if g.get("match"):
+            lines.append(f"  matched: {_describe(g['match'])}")
+        for other in rec.get("findings") or []:
+            if other["severity"] in SEVERE and other is not g.get("match"):
+                lines.append(f"  severe:  {_describe(other)}")
+        verdict = g["outcome"] if g["outcome"] in VERDICTS else "miss"
+        lines.append("  " + json.dumps({"config": rec["config"], "case": rec["case"], "run": n,
+                                        "started": rec.get("started"), "verdict": verdict}))
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) + "\n"
 
 
 def _fill(template, values: dict):
@@ -588,18 +646,26 @@ def load_config(path) -> tuple[dict, Path]:
     return json.loads(p.read_text(encoding="utf-8")), p.parent
 
 
-def report(cases: list[dict], runs_dir: Path, tolerance: int = 10) -> str:
+def report(cases: list[dict], runs_dir: Path, tolerance: int = 10,
+           verdicts: dict[tuple[str, str, int], dict] | None = None) -> str:
     results: dict[tuple[str, str], list[dict]] = {}
     meta: dict[str, dict] = {}
+    verdicts = verdicts or {}
     for f in sorted(runs_dir.glob("*/*/run-*.json")):
         rec = json.loads(f.read_text(encoding="utf-8"))
         case = next((c for c in cases if c["id"] == rec["case"]), None)
         if case is None:
             continue
         g = grade_run(case, rec.get("findings"), tolerance)
-        results.setdefault((rec["config"], rec["case"]), []).append(g)
         m = meta.setdefault(rec["config"], {"cost": 0.0, "costed": 0, "seconds": 0.0, "runs": 0,
-                                            "unparsed": 0})
+                                            "unparsed": 0, "graded": 0, "confirmed": 0})
+        if case.get("set") != "control" and g["outcome"] != "unparsed":
+            m["graded"] += 1
+            v = verdicts.get((rec["config"], rec["case"], _run_number(f)))
+            if v and v.get("started") == rec.get("started"):
+                g = {**g, "outcome": v["verdict"]}
+                m["confirmed"] += 1
+        results.setdefault((rec["config"], rec["case"]), []).append(g)
         m["runs"] += 1
         m["seconds"] += rec.get("seconds") or 0
         m["unparsed"] += g["outcome"] == "unparsed"
@@ -640,6 +706,14 @@ def report(cases: list[dict], runs_dir: Path, tolerance: int = 10) -> str:
                      f"{cost} | {m['seconds'] / m['runs'] / 60:.1f} |" if n else
                      f"| {c} | {caught[c]} | n/a | {m['runs']} | {m['unparsed']} | {cost} | "
                      f"{m['seconds'] / m['runs'] / 60:.1f} |")
+    lines.append("")
+    for c in configs:
+        m = meta[c]
+        if m["graded"] and m["confirmed"] < m["graded"]:
+            lines.append(f"{c}: {m['graded'] - m['confirmed']} of {m['graded']} case runs are graded by "
+                         "line only; check them with `matches` and record verdicts (--verdicts).")
+        elif m["graded"]:
+            lines.append(f"{c}: every case run has a person's verdict.")
     return "\n".join(lines) + "\n"
 
 
@@ -683,6 +757,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--cases", required=True)
     g.add_argument("--out", default="runs")
     g.add_argument("--tolerance", type=int, default=10)
+    g.add_argument("--verdicts", help="a person's verdicts on graded runs (JSONL; see `matches`)")
+    mt = sub.add_parser("matches", help="list what each case run was graded on, with a verdict line")
+    mt.add_argument("--cases", required=True)
+    mt.add_argument("--out", default="runs")
+    mt.add_argument("--tolerance", type=int, default=10)
+    mt.add_argument("--config", help="only this config's runs")
     args = p.parse_args(argv)
 
     if args.cmd == "anchors":
@@ -746,7 +826,10 @@ def main(argv: list[str] | None = None) -> int:
         case = next(x for x in load_cases(args.cases) if x["id"] == args.case)
         return 0 if probe(args.repo, case, config, cdir, Path(args.out)) else 1
     elif args.cmd == "report":
-        sys.stdout.write(report(load_cases(args.cases), Path(args.out), args.tolerance))
+        sys.stdout.write(report(load_cases(args.cases), Path(args.out), args.tolerance,
+                                load_verdicts(args.verdicts)))
+    elif args.cmd == "matches":
+        sys.stdout.write(matches(load_cases(args.cases), Path(args.out), args.tolerance, args.config))
     return 0
 
 
