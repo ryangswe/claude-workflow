@@ -152,6 +152,9 @@ def build_snapshot(repo, case: dict, config: dict, config_dir: Path, dest: Path)
     _clear(dest)
     _extract(repo, merge, dest)
     _overlay(dest, config, config_dir)
+    # Both versions can carry the same mtime and size, so git's stat cache would call a rewritten
+    # file unchanged. An empty index makes the add hash every file again.
+    git(dest, "read-tree", "--empty", env=FIXED_ENV)
     git(dest, "add", "-A", "-f", env=FIXED_ENV)
     git(dest, "commit", "-q", "--no-verify", "--allow-empty",
         "-m", f"{case.get('title', '')} (PR #{case.get('pr', '?')})", env=FIXED_ENV)
